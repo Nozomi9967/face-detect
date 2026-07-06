@@ -36,3 +36,4 @@ face-detect-app/backend/test_*.jpg  # 测试图片
 face-detect-app/data/               # 运行时数据目录
 .claude/settings*
 .claude/scheduled_tasks.json
+.claude/
