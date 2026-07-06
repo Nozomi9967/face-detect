@@ -1,0 +1,529 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>多人脸采集素材自动化清洗</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+            background: #f5f7fa;
+            min-height: 100vh;
+        }
+
+        /* ── Header ── */
+        .header {
+            background: linear-gradient(135deg, #1a73e8, #0d47a1);
+            color: white;
+            padding: 20px;
+            text-align: center;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+        }
+        .header h1 { font-size: 1.3rem; font-weight: 600; }
+        .header p { font-size: 0.85rem; opacity: 0.85; margin-top: 4px; }
+
+        /* ── Upload Zone ── */
+        .container { max-width: 800px; margin: 0 auto; padding: 16px; }
+
+        .upload-zone {
+            border: 2px dashed #1a73e8;
+            border-radius: 16px;
+            padding: 40px 20px;
+            text-align: center;
+            background: #e8f0fe;
+            cursor: pointer;
+            transition: all 0.3s;
+            margin-bottom: 20px;
+        }
+        .upload-zone:hover, .upload-zone.dragover {
+            background: #d2e3fc;
+            border-color: #0d47a1;
+        }
+        .upload-zone .icon { font-size: 3rem; color: #1a73e8; }
+        .upload-zone p { color: #5f6368; margin-top: 8px; font-size: 0.95rem; }
+        .upload-zone input[type="file"] { display: none; }
+
+        /* ── Mode Tabs ── */
+        .mode-tabs {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 16px;
+        }
+        .mode-tab {
+            flex: 1;
+            padding: 12px;
+            border: none;
+            border-radius: 10px;
+            background: white;
+            color: #5f6368;
+            font-size: 0.9rem;
+            cursor: pointer;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            transition: all 0.2s;
+        }
+        .mode-tab.active {
+            background: #1a73e8;
+            color: white;
+            box-shadow: 0 2px 8px rgba(26,115,232,0.3);
+        }
+
+        /* ── Results ── */
+        .result-card {
+            background: white;
+            border-radius: 12px;
+            padding: 16px;
+            margin-bottom: 16px;
+            box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+        }
+        .result-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+        .result-header h3 { font-size: 1rem; color: #202124; }
+        .result-stats {
+            display: flex;
+            gap: 12px;
+            font-size: 0.8rem;
+        }
+        .stat-badge {
+            background: #e8f0fe;
+            color: #1a73e8;
+            padding: 4px 10px;
+            border-radius: 20px;
+            font-weight: 500;
+        }
+
+        .result-image {
+            width: 100%;
+            border-radius: 8px;
+            margin-bottom: 12px;
+        }
+
+        /* ── Face List ── */
+        .face-list {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        .face-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 10px 14px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            border-left: 4px solid #1a73e8;
+        }
+        .face-item .face-id {
+            background: #1a73e8;
+            color: white;
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 600;
+            font-size: 0.85rem;
+            flex-shrink: 0;
+        }
+        .face-item .face-info { flex: 1; }
+        .face-item .seat-tag {
+            font-size: 0.8rem;
+            padding: 3px 10px;
+            border-radius: 12px;
+            font-weight: 500;
+        }
+        .seat-master_driver { background: #e0f7fa; color: #006064; }
+        .seat-co_driver { background: #fff3e0; color: #e65100; }
+        .seat-posterior_left { background: #fce4ec; color: #880e4f; }
+        .seat-posterior_right { background: #e8f5e9; color: #1b5e20; }
+        .seat-after_the_middle { background: #e3f2fd; color: #0d47a1; }
+
+        .conf-bar {
+            width: 60px;
+            height: 6px;
+            background: #e0e0e0;
+            border-radius: 3px;
+            overflow: hidden;
+        }
+        .conf-fill {
+            height: 100%;
+            background: #1a73e8;
+            border-radius: 3px;
+        }
+
+        /* ── Legend ── */
+        .legend {
+            background: white;
+            border-radius: 12px;
+            padding: 16px;
+            margin-bottom: 16px;
+            box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+        }
+        .legend h3 { font-size: 0.95rem; margin-bottom: 12px; color: #202124; }
+        .legend-items {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+        }
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.85rem;
+        }
+        .legend-dot {
+            width: 14px;
+            height: 14px;
+            border-radius: 4px;
+        }
+
+        /* ── Loading ── */
+        .loading-overlay {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(255,255,255,0.9);
+            z-index: 1000;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+        .loading-overlay.active { display: flex; }
+        .spinner {
+            width: 48px; height: 48px;
+            border: 4px solid #e8f0fe;
+            border-top: 4px solid #1a73e8;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin { 100% { transform: rotate(360deg); } }
+        .loading-text {
+            margin-top: 16px;
+            color: #5f6368;
+            font-size: 0.95rem;
+        }
+
+        /* ── Comparison Table ── */
+        .comparison-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.85rem;
+        }
+        .comparison-table th, .comparison-table td {
+            padding: 8px 12px;
+            text-align: left;
+            border-bottom: 1px solid #e8eaed;
+        }
+        .comparison-table th {
+            background: #f8f9fa;
+            font-weight: 600;
+            color: #202124;
+        }
+        .person-match {
+            background: #e6f4ea;
+            padding: 2px 8px;
+            border-radius: 10px;
+            color: #137333;
+            font-weight: 500;
+        }
+
+        @media (max-width: 480px) {
+            .legend-items { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="header">
+        <h1>🔍 多人脸采集素材自动化清洗</h1>
+        <p>YOLOv8-face + InsightFace + 座位分类</p>
+    </div>
+
+    <div class="container">
+        <!-- 座位图例 -->
+        <div class="legend">
+            <h3>座位区域图例</h3>
+            <div class="legend-items">
+                <div class="legend-item">
+                    <div class="legend-dot" style="background:#64b5f6"></div>
+                    <span>主驾 (master_driver)</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-dot" style="background:#ffb74d"></div>
+                    <span>副驾 (co_driver)</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-dot" style="background:#e57373"></div>
+                    <span>后排左 (posterior_left)</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-dot" style="background:#81c784"></div>
+                    <span>后排中 (posterior_right)</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-dot" style="background:#64b5f6"></div>
+                    <span>后排右 (after_the_middle)</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- 模式选择 -->
+        <div class="mode-tabs">
+            <button class="mode-tab active" onclick="switchMode('single')" id="tab-single">
+                📷 单张检测
+            </button>
+            <button class="mode-tab" onclick="switchMode('batch')" id="tab-batch">
+                📁 批量清洗
+            </button>
+        </div>
+
+        <!-- 上传区域 -->
+        <div class="upload-zone" id="uploadZone" onclick="document.getElementById('fileInput').click()">
+            <div class="icon">📤</div>
+            <p id="uploadText">点击或拖拽上传图片（支持 JPG/PNG）</p>
+            <input type="file" id="fileInput" accept="image/*"
+                   onchange="handleFiles(this.files)" multiple>
+        </div>
+
+        <!-- 单张检测结果 -->
+        <div id="singleResult"></div>
+
+        <!-- 批量检测结果 -->
+        <div id="batchResult"></div>
+    </div>
+
+    <!-- Loading -->
+    <div class="loading-overlay" id="loadingOverlay">
+        <div class="spinner"></div>
+        <div class="loading-text" id="loadingText">正在检测中...</div>
+    </div>
+
+    <script>
+        let currentMode = 'single';
+
+        function switchMode(mode) {
+            currentMode = mode;
+            document.querySelectorAll('.mode-tab').forEach(t => t.classList.remove('active'));
+            document.getElementById(`tab-${mode}`).classList.add('active');
+
+            document.getElementById('uploadText').textContent =
+                mode === 'single'
+                    ? '点击或拖拽上传图片（支持 JPG/PNG）'
+                    : '点击或拖拽上传多张图片（批量清洗）';
+
+            // 单张模式只允许选一张
+            const input = document.getElementById('fileInput');
+            input.multiple = mode === 'batch';
+            document.getElementById('singleResult').innerHTML = '';
+            document.getElementById('batchResult').innerHTML = '';
+        }
+
+        // 拖拽上传
+        const zone = document.getElementById('uploadZone');
+        zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('dragover'); });
+        zone.addEventListener('dragleave', () => zone.classList.remove('dragover'));
+        zone.addEventListener('drop', e => {
+            e.preventDefault();
+            zone.classList.remove('dragover');
+            handleFiles(e.dataTransfer.files);
+        });
+
+        async function handleFiles(files) {
+            if (!files || files.length === 0) return;
+
+            if (currentMode === 'single') {
+                await handleSingle(files[0]);
+            } else {
+                await handleBatch(files);
+            }
+        }
+
+        async function handleSingle(file) {
+            showLoading('正在检测人脸...');
+            const formData = new FormData();
+            formData.append('file', file);
+
+            try {
+                const resp = await fetch('/api/detect', {
+                    method: 'POST',
+                    body: formData,
+                });
+                const data = await resp.json();
+
+                renderSingleResult(data);
+            } catch (err) {
+                alert('检测失败：' + err.message);
+            } finally {
+                hideLoading();
+            }
+        }
+
+        async function handleBatch(files) {
+            showLoading(`正在处理 ${files.length} 张图片...`);
+            const formData = new FormData();
+            for (const f of files) {
+                formData.append('files', f);
+            }
+
+            try {
+                const resp = await fetch('/api/detect-batch', {
+                    method: 'POST',
+                    body: formData,
+                });
+                const data = await resp.json();
+
+                renderBatchResult(data);
+            } catch (err) {
+                alert('批量处理失败：' + err.message);
+            } finally {
+                hideLoading();
+            }
+        }
+
+        function renderSingleResult(data) {
+            const container = document.getElementById('singleResult');
+            if (data.num_faces === 0) {
+                container.innerHTML = `
+                    <div class="result-card" style="text-align:center;padding:30px;">
+                        <p style="color:#5f6368;">未检测到人脸</p>
+                    </div>`;
+                return;
+            }
+
+            const faceItems = data.faces.map(f => `
+                <div class="face-item" style="border-left-color:${getSeatColor(f.seat)}">
+                    <div class="face-id">${f.person_id}</div>
+                    <div class="face-info">
+                        <strong>${f.seat_label}</strong>
+                        <span style="margin-left:8px;color:#5f6368;font-size:0.8rem;">
+                            置信度: ${(f.conf * 100).toFixed(1)}%
+                        </span>
+                    </div>
+                    <span class="seat-tag seat-${f.seat}">${f.seat_label}</span>
+                </div>
+            `).join('');
+
+            container.innerHTML = `
+                <div class="result-card">
+                    <div class="result-header">
+                        <h3>📸 检测结果</h3>
+                        <div class="result-stats">
+                            <span class="stat-badge">检测到 ${data.num_faces} 张人脸</span>
+                            <span class="stat-badge">耗时 ${data.processing_time_ms}ms</span>
+                        </div>
+                    </div>
+                    <img class="result-image" src="${data.annotated_image_base64}" alt="检测结果">
+                    <div class="face-list">${faceItems}</div>
+                </div>`;
+        }
+
+        function renderBatchResult(data) {
+            const container = document.getElementById('batchResult');
+
+            // 统计：每个人的出现次数
+            const personCount = {};
+            const personSeats = {};
+            data.results.forEach(r => {
+                r.faces.forEach(f => {
+                    personCount[f.person_id] = (personCount[f.person_id] || 0) + 1;
+                    if (!personSeats[f.person_id]) personSeats[f.person_id] = {};
+                    personSeats[f.person_id][f.seat] = (personSeats[f.person_id][f.seat] || 0) + 1;
+                });
+            });
+
+            const summaryRows = Object.entries(personCount).sort((a, b) => a[0] - b[0]).map(([pid, count]) => {
+                const mainSeat = Object.entries(personSeats[pid]).sort((a, b) => b[1] - a[1])[0][0];
+                return `<tr>
+                    <td>#${pid}</td>
+                    <td>${count} 次</td>
+                    <td><span class="person-match">${getSeatLabel(mainSeat)}</span></td>
+                </tr>`;
+            }).join('');
+
+            const allFaces = data.results.flatMap(r => r.faces);
+
+            const faceItems = allFaces.map(f => `
+                <div class="face-item" style="border-left-color:${getSeatColor(f.seat)}">
+                    <div class="face-id">${f.person_id}</div>
+                    <div class="face-info">
+                        <strong>图片${f.image_id + 1}:</strong> ${f.seat_label}
+                        <span style="margin-left:8px;color:#5f6368;font-size:0.8rem;">
+                            ${(f.conf * 100).toFixed(1)}%
+                        </span>
+                    </div>
+                    <span class="seat-tag seat-${f.seat}">${f.seat_label}</span>
+                </div>
+            `).join('');
+
+            const imageCards = data.results.map((r, i) => `
+                <div class="result-card">
+                    <div class="result-header">
+                        <h3>📸 图片 ${i + 1}: ${r.filename || '未命名'}</h3>
+                        <div class="result-stats">
+                            <span class="stat-badge">${r.num_faces} 张人脸</span>
+                        </div>
+                    </div>
+                    <img class="result-image" src="${r.annotated_image_base64}" alt="结果${i+1}">
+                </div>
+            `).join('');
+
+            container.innerHTML = `
+                <div class="result-card" style="margin-bottom:16px;">
+                    <div class="result-header">
+                        <h3>📊 批量统计</h3>
+                        <div class="result-stats">
+                            <span class="stat-badge">${data.total_images} 张图片</span>
+                            <span class="stat-badge">${data.total_faces} 次人脸检测</span>
+                            <span class="stat-badge">${Object.keys(personCount).length} 个不同人员</span>
+                            <span class="stat-badge">总耗时 ${data.processing_time_ms}ms</span>
+                        </div>
+                    </div>
+                    <table class="comparison-table">
+                        <thead><tr><th>人员ID</th><th>出现次数</th><th>主要座位</th></tr></thead>
+                        <tbody>${summaryRows || '<tr><td colspan="3" style="text-align:center">未检测到人脸</td></tr>'}</tbody>
+                    </table>
+                </div>
+                <h3 style="margin:16px 0 8px;color:#202124;">📋 所有人脸标注</h3>
+                <div class="face-list" style="margin-bottom:16px;">${faceItems}</div>
+                <h3 style="margin:16px 0 8px;color:#202124;">🖼️ 标注图片</h3>
+                ${imageCards}
+            `;
+        }
+
+        function getSeatColor(seat) {
+            const map = {
+                master_driver: '#4fc3f7',
+                co_driver: '#ffb74d',
+                posterior_left: '#e57373',
+                posterior_right: '#81c784',
+                after_the_middle: '#64b5f6',
+            };
+            return map[seat] || '#bdbdbd';
+        }
+
+        function getSeatLabel(seat) {
+            const map = {
+                master_driver: '主驾',
+                co_driver: '副驾',
+                posterior_left: '后排左',
+                posterior_right: '后排中',
+                after_the_middle: '后排右',
+            };
+            return map[seat] || seat;
+        }
+
+        function showLoading(text) {
+            document.getElementById('loadingText').textContent = text || '处理中...';
+            document.getElementById('loadingOverlay').classList.add('active');
+        }
+        function hideLoading() {
+            document.getElementById('loadingOverlay').classList.remove('active');
+        }
+    </script>
+</body>
+</html>
