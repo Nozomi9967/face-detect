@@ -12,13 +12,14 @@ from pathlib import Path
 from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse, JSONResponse
+import socket
 from pydantic import BaseModel
 import uvicorn
 
 # 将backend目录加入路径
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from .pipeline import Pipeline
+from app.pipeline import Pipeline
 
 # ── 路径配置 ──────────────────────────────────────────────
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
@@ -28,7 +29,7 @@ UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 RESULT_DIR.mkdir(parents=True, exist_ok=True)
 
 # ── 初始化引擎 ─────────────────────────────────────────────
-pipeline = Pipeline(detector_conf=0.5, similarity_threshold=0.5)
+pipeline = Pipeline(detector_conf=0.1, similarity_threshold=0.5)
 
 # ── FastAPI应用 ─────────────────────────────────────────────
 app = FastAPI(
@@ -80,52 +81,44 @@ async def health():
 
 @app.post("/api/detect", response_model=DetectionResponse)
 async def detect_faces(file: UploadFile = File(...)):
-    """
-    上传单张图片，返回检测结果
+    import time, traceback
+    try:
+        contents = await file.read()
+        nparr = np.frombuffer(contents, np.uint8)
+        image = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
 
-    - 检测所有人脸框
-    - 分配统一ID（基于特征匹配）
-    - 分类座位位置
-    - 返回标注后的图片
-    """
-    import time
+        if image is None:
+            raise HTTPException(status_code=400, detail="无法解析图片文件，请上传JPG/PNG格式")
 
-    # 读取图片
-    contents = await file.read()
-    nparr = np.frombuffer(contents, np.uint8)
-    image = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+        ext = Path(file.filename).suffix or ".jpg"
+        t0 = time.time()
+        save_name = f"{int(t0*1000)}{ext}"
+        save_path = UPLOAD_DIR / save_name
+        cv2.imwrite(str(save_path), image)
 
-    if image is None:
-        raise HTTPException(status_code=400, detail="无法解析图片文件")
+        result = pipeline.process_image(image, image_id=0)
+        elapsed_ms = (time.time() - t0) * 1000
 
-    # 保存原始图片
-    ext = Path(file.filename).suffix or ".jpg"
-    t0 = time.time()
-    save_name = f"{int(t0*1000)}{ext}"
-    save_path = UPLOAD_DIR / save_name
-    cv2.imwrite(str(save_path), image)
+        result_name = f"result_{save_name}"
+        result_path = RESULT_DIR / result_name
+        cv2.imwrite(str(result_path), result["annotated_image"])
 
-    # 处理
-    result = pipeline.process_image(image, image_id=0)
-    elapsed_ms = (time.time() - t0) * 1000
+        _, buf = cv2.imencode(".jpg", result["annotated_image"], [cv2.IMWRITE_JPEG_QUALITY, 85])
+        img_b64 = base64.b64encode(buf).decode("utf-8")
 
-    # 保存标注图
-    result_name = f"result_{save_name}"
-    result_path = RESULT_DIR / result_name
-    cv2.imwrite(str(result_path), result["annotated_image"])
-
-    # 编码标注图为base64
-    _, buf = cv2.imencode(".jpg", result["annotated_image"], [cv2.IMWRITE_JPEG_QUALITY, 85])
-    img_b64 = base64.b64encode(buf).decode("utf-8")
-
-    return DetectionResponse(
-        image_id=result["image_id"],
-        filename=file.filename,
-        num_faces=result["num_faces"],
-        faces=[FaceResult(**f) for f in result["faces"]],
-        annotated_image_base64=f"data:image/jpeg;base64,{img_b64}",
-        processing_time_ms=round(elapsed_ms, 1),
-    )
+        return DetectionResponse(
+            image_id=result["image_id"],
+            filename=file.filename,
+            num_faces=result["num_faces"],
+            faces=[FaceResult(**f) for f in result["faces"]],
+            annotated_image_base64=f"data:image/jpeg;base64,{img_b64}",
+            processing_time_ms=round(elapsed_ms, 1),
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"处理失败: {str(e)}")
 
 
 @app.post("/api/detect-batch")
@@ -182,11 +175,38 @@ async def detect_batch(files: list[UploadFile] = File(...)):
 @app.get("/api/seat-zones")
 async def get_seat_zones():
     """获取当前座位区域配置"""
-    from seat_classifier import SEAT_ZONES, COLOR_MAP
+    from app.seat_classifier import SEAT_ZONES, COLOR_MAP
     return {
         "zones": SEAT_ZONES,
         "colors": {k: list(v) for k, v in COLOR_MAP.items()},
     }
+
+
+@app.get("/api/server-info")
+async def server_info():
+    """返回服务器地址，供手机配网页面获取"""
+    port = 8000
+    url = f"http://{_get_lan_ip()}:{port}"
+    return {"url": url}
+
+
+@app.get("/setup", response_class=HTMLResponse)
+async def setup_page():
+    """配网页面 — 手机扫码获取服务器地址"""
+    setup_path = BASE_DIR / "frontend" / "setup.html"
+    return setup_path.read_text(encoding="utf-8")
+
+
+def _get_lan_ip() -> str:
+    """获取本机的局域网 IP 地址"""
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.connect(("8.8.8.8", 80))
+        ip = s.getsockname()[0]
+        s.close()
+        return ip
+    except Exception:
+        return "127.0.0.1"
 
 
 if __name__ == "__main__":

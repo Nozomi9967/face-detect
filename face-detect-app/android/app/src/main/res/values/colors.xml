@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- TouchFlow-inspired color palette -->
+    <color name="primary">#3B82F6</color>
+    <color name="primary_dark">#2563EB</color>
+    <color name="secondary">#F97171</color>
+    <color name="tertiary">#34D399</color>
+    <color name="background">#FFFFFF</color>
+    <color name="surface">#F9FAFB</color>
+    <color name="text_primary">#111827</color>
+    <color name="text_secondary">#6B7280</color>
+    <color name="error">#EF4444</color>
+    <color name="success">#34D399</color>
+    <color name="warning">#FBBF24</color>
+</resources>

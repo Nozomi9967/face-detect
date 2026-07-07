@@ -21,38 +21,31 @@ class FaceDetector:
 
     def _init_detector(self, model_path: Optional[str]):
         """初始化检测器，优先YOLOv8，fallback到Haar"""
-        # 尝试加载 YOLOv8-face
         try:
             from ultralytics import YOLO
 
-            # 检查模型文件是否已存在
-            model_file = model_path or "yolov8n-face.pt"
-            model_full_path = Path(model_file)
+            # 检查模型文件（优先lindevs的face模型，再通用yolo）
+            candidates = [
+                model_path,
+                "yolov8n-face-lindevs.pt",
+                "yolov8n-face.pt",
+            ]
+            model_file = None
+            for candidate in candidates:
+                if candidate and Path(candidate).exists():
+                    model_file = candidate
+                    break
 
-            if model_full_path.exists():
-                self.yolo_model = YOLO(str(model_full_path))
+            if model_file:
+                self.yolo_model = YOLO(model_file)
                 self.backend = "yolo"
-                print(f"[FaceDetector] 使用 YOLOv8-face 模型: {model_file}")
+                print(f"[FaceDetector] YOLOv8-face 就绪: {model_file}")
                 return
 
-            # 尝试从 ultralytics 预训练目录加载
-            ultralytics_dir = Path.home() / ".ultralytics" / "weights"
-            cached_model = ultralytics_dir / model_file
-            if cached_model.exists():
-                self.yolo_model = YOLO(str(cached_model))
-                self.backend = "yolo"
-                print(f"[FaceDetector] 使用缓存模型: {cached_model}")
-                return
-
-            # 模型不存在，标记为未就绪
-            print(f"[FaceDetector] YOLOv8-face 模型未找到 ({model_file})，"
-                  f"将使用 OpenCV Haar Cascade 作为 fallback")
-            print(f"[FaceDetector] 如需使用YOLOv8，请下载模型到: {model_full_path.absolute()}")
-
+            print("[FaceDetector] 未找到face模型，使用 Haar Cascade fallback")
         except ImportError:
-            print("[FaceDetector] ultralytics 未安装，使用 OpenCV Haar Cascade")
+            print("[FaceDetector] ultralytics 未安装，使用 Haar Cascade")
 
-        # 使用 Haar Cascade 作为 fallback
         self._init_haar()
 
     def _init_haar(self):

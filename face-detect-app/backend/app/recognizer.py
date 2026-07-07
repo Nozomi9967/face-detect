@@ -1,64 +1,85 @@
 """
-人脸识别引擎
-使用纯 OpenCV 离线方案：Haar 检测 + 像素统计特征
-无需下载任何外部模型文件
+人脸识别引擎 - 使用 InsightFace/ArcFace 做人脸特征匹配
+模型已下载到 ~/.insightface/models/buffalo_l/
 """
 
-import numpy as np
 import cv2
+import numpy as np
 from typing import Optional
 from collections import defaultdict
 
 
 class FaceRecognizer:
-    """离线人脸特征匹配（纯OpenCV实现）"""
+    """基于 InsightFace ArcFace 的人脸特征匹配"""
 
     def __init__(self):
-        self.available = True  # Haar + 像素特征始终可用
-        self._lbph_cascade = None
+        self.app = None
+        self.available = False
+        self._load_model()
 
-    def _get_cascade(self):
-        """懒加载 Haar Cascade"""
-        if self._lbph_cascade is None:
-            cascade_path = cv2.data.haarcascades + "haarcascade_frontalface_default.xml"
-            self._lbph_cascade = cv2.CascadeClassifier(cascade_path)
-        return self._lbph_cascade
+    def _load_model(self):
+        """加载 InsightFace 模型"""
+        try:
+            from insightface.app import FaceAnalysis
+
+            self.app = FaceAnalysis(
+                name="buffalo_l",
+                providers=['CPUExecutionProvider']
+            )
+            self.app.prepare(ctx_id=0, det_size=(640, 640))
+            self.available = True
+            print("[FaceRecognizer] InsightFace ArcFace 就绪 (512维特征)")
+        except Exception as e:
+            self.available = False
+            print(f"[FaceRecognizer] 模型加载失败: {e}")
+            print("[FaceRecognizer] 降级为像素特征匹配模式")
 
     def extract_embedding(self, image: np.ndarray, bbox: list[float]) -> Optional[np.ndarray]:
-        """
-        提取人脸特征向量（128维）
-        方法：灰度化 → 缩小到16x16 → 展平 → L2归一化
-        """
-        try:
-            x1, y1, x2, y2 = map(int, bbox)
-            h_img, w_img = image.shape[:2]
-            x1, y1 = max(0, x1), max(0, y1)
-            x2, y2 = min(w_img, x2), min(h_img, y2)
+        """提取人脸 512 维特征向量"""
+        if not self.available or self.app is None:
+            return self._extract_fallback(image, bbox)
 
-            if x2 <= x1 or y2 <= y1:
+        try:
+            h, w = image.shape[:2]
+            x1, y1, x2, y2 = bbox
+            bw, bh = x2 - x1, y2 - y1
+            cx, cy = (x1 + x2) / 2, (y1 + y2) / 2
+            expand = 0.2
+            x1 = max(0, int(cx - bw * (1 + expand) / 2))
+            y1 = max(0, int(cy - bh * (1 + expand) / 2))
+            x2 = min(w, int(cx + bw * (1 + expand) / 2))
+            y2 = min(h, int(cy + bh * (1 + expand) / 2))
+
+            face_img = image[y1:y2, x1:x2]
+            if face_img.size == 0:
                 return None
 
+            faces = self.app.get(face_img)
+            if len(faces) == 0:
+                return None
+
+            best_face = max(faces, key=lambda f: f.det_score)
+            return best_face.normed_embedding
+        except Exception:
+            return None
+
+    def _extract_fallback(self, image: np.ndarray, bbox: list[float]) -> Optional[np.ndarray]:
+        """降级：像素直方图特征"""
+        try:
+            x1, y1, x2, y2 = map(int, bbox)
+            x1, y1 = max(0, x1), max(0, y1)
+            x2, y2 = min(image.shape[1], x2), min(image.shape[0], y2)
+            if x2 <= x1 or y2 <= y1:
+                return None
             face_roi = image[y1:y2, x1:x2]
             if face_roi.size == 0:
                 return None
-
-            # 缩放 + 灰度
             face_resized = cv2.resize(face_roi, (16, 16))
             gray = cv2.cvtColor(face_resized, cv2.COLOR_BGR2GRAY)
-
-            # 直方图均衡化（光照归一化）
             gray = cv2.equalizeHist(gray)
-
-            # 展平为特征向量并归一化
             emb = gray.astype(np.float32).flatten()
             norm = np.linalg.norm(emb)
-            if norm > 1e-6:
-                emb = emb / norm
-            else:
-                return None
-
-            return emb
-
+            return emb / norm if norm > 1e-6 else None
         except Exception:
             return None
 
@@ -73,9 +94,7 @@ class FaceRecognizer:
         all_faces: list[dict],
         similarity_threshold: float = 0.5
     ) -> list[dict]:
-        """
-        跨图片匹配人脸，分配统一ID
-        """
+        """跨图片匹配人脸分配统一ID"""
         by_image = defaultdict(list)
         for i, face in enumerate(all_faces):
             by_image[face["image_id"]].append(i)

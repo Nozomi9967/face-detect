@@ -17,9 +17,10 @@ class Pipeline:
         self,
         detector_conf: float = 0.5,
         similarity_threshold: float = 0.5,
+        use_recognition: bool = False,  # InsightFace特征匹配（CPU慢，默认关闭）
     ):
         self.detector = FaceDetector(conf_threshold=detector_conf)
-        self.recognizer = FaceRecognizer()
+        self.recognizer = FaceRecognizer() if use_recognition else None
         self.classifier = SeatClassifier()
         self.annotator = FaceAnnotator()
 
@@ -41,20 +42,26 @@ class Pipeline:
         # 1. 人脸检测
         raw_faces = self.detector.detect(image)
 
-        # 2. 提取人脸特征
-        for face in raw_faces:
-            face["embedding"] = self.recognizer.extract_embedding(image, face["bbox"])
-            face["image_id"] = image_id
+        # 2. 提取人脸特征（可选）
+        if self.recognizer:
+            for face in raw_faces:
+                face["embedding"] = self.recognizer.extract_embedding(image, face["bbox"])
+                face["image_id"] = image_id
 
-        # 3. 跨图片人脸匹配（分配统一ID）
-        matched_faces = self.recognizer.match_faces_across_images(
-            raw_faces, similarity_threshold=0.5
-        )
+            # 3. 跨图片人脸匹配
+            matched_faces = self.recognizer.match_faces_across_images(
+                raw_faces, similarity_threshold=similarity_threshold
+            )
+        else:
+            for i, face in enumerate(raw_faces):
+                face["person_id"] = i + 1
+            matched_faces = raw_faces
 
         # 4. 座位分类
         h, w = image.shape[:2]
+        all_bboxes = [f["bbox"] for f in matched_faces]
         for face in matched_faces:
-            face["seat"] = self.classifier.classify(face["bbox"], w, h)
+            face["seat"] = self.classifier.classify(face["bbox"], w, h, all_bboxes)
 
         # 5. 可视化标注
         annotated = self.annotator.draw(image, matched_faces)
@@ -88,23 +95,31 @@ class Pipeline:
 
         for i, img in enumerate(images):
             raw_faces = self.detector.detect(img)
-            for face in raw_faces:
-                face["embedding"] = self.recognizer.extract_embedding(img, face["bbox"])
-                face["image_id"] = i
+            if self.recognizer:
+                for face in raw_faces:
+                    face["embedding"] = self.recognizer.extract_embedding(img, face["bbox"])
+                    face["image_id"] = i
+            else:
+                for j, face in enumerate(raw_faces):
+                    face["person_id"] = j + 1
             all_faces.extend(raw_faces)
 
         # 跨所有图片做人脸匹配
-        matched_faces = self.recognizer.match_faces_across_images(
-            all_faces, similarity_threshold=0.5
-        )
+        if self.recognizer:
+            matched_faces = self.recognizer.match_faces_across_images(
+                all_faces, similarity_threshold=similarity_threshold
+            )
+        else:
+            matched_faces = all_faces
 
         # 重新按图片分组
         results = []
         for i, img in enumerate(images):
             h, w = img.shape[:2]
             img_faces = [f for f in matched_faces if f["image_id"] == i]
+            all_bboxes = [f["bbox"] for f in img_faces]
             for face in img_faces:
-                face["seat"] = self.classifier.classify(face["bbox"], w, h)
+                face["seat"] = self.classifier.classify(face["bbox"], w, h, all_bboxes)
 
             annotated = self.annotator.draw(img, img_faces)
             annotated_images.append(annotated)

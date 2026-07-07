@@ -1,0 +1,11 @@
+#!/bin/sh
+# Gradle wrapper script using local Gradle 8.10 installation
+APP_NAME="Gradle"
+
+GRADLE_VERSION="8.10"
+GRADLE_HOME="/c/Users/q1948/.gradle/wrapper/dists/gradle-8.10-bin/deqhafrv1ntovfmgh0nh3npr9/gradle-8.10"
+GRADLE_OPTS=""
+
+DEFAULT_JVM_OPTS='"-Xmx64m" "-Xms64m"'
+
+exec "$GRADLE_HOME/bin/gradle" "$@"

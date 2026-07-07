@@ -10,15 +10,15 @@ from pathlib import Path
 from collections import defaultdict
 from typing import Optional
 
-# ─── 座位区域定义（基于图像坐标的比例，归一化到0-1）───
-# 布局：后排（上）← 前排（下）
-#     左      中      右
+# ─── 座位区域定义（基于真实车内俯视视角）───
+# 前排人脸中心通常在 y=0.30-0.50，后排在 y=0.25-0.40
+# 通过Y坐标细分为前排/后排，再通过X区分左右
 SEAT_ZONES = {
-    "posterior_left":  {"x_range": (0.00, 0.33), "y_range": (0.00, 0.50), "label": "后排左"},
-    "posterior_right": {"x_range": (0.33, 0.66), "y_range": (0.00, 0.50), "label": "后排中"},
-    "after_the_middle":{"x_range": (0.66, 1.00), "y_range": (0.00, 0.50), "label": "后排右"},
-    "co_driver":       {"x_range": (0.00, 0.50), "y_range": (0.50, 1.00), "label": "副驾"},
-    "master_driver":   {"x_range": (0.50, 1.00), "y_range": (0.50, 1.00), "label": "主驾"},
+    "co_driver":       {"x_range": (0.00, 0.40), "y_range": (0.30, 0.55), "label": "副驾"},
+    "master_driver":   {"x_range": (0.60, 1.00), "y_range": (0.30, 0.55), "label": "主驾"},
+    "posterior_left":  {"x_range": (0.25, 0.45), "y_range": (0.25, 0.45), "label": "后排左"},
+    "posterior_right": {"x_range": (0.45, 0.65), "y_range": (0.25, 0.45), "label": "后排中"},
+    "after_the_middle":{"x_range": (0.65, 0.90), "y_range": (0.25, 0.50), "label": "后排右"},
 }
 
 # 颜色映射 (RGB for PIL, BGR for cv2)
@@ -51,18 +51,92 @@ def _get_font(size: int = 20):
 
 
 class SeatClassifier:
-    """基于人脸框中心坐标的规则座位分类"""
+    """基于人脸框坐标 + 大小的规则座位分类"""
 
     @staticmethod
-    def classify(bbox, img_w: int, img_h: int) -> str:
-        cx = (bbox[0] + bbox[2]) / 2 / img_w
-        cy = (bbox[1] + bbox[3]) / 2 / img_h
-        for seat_id, zone in SEAT_ZONES.items():
-            xr = zone["x_range"]
-            yr = zone["y_range"]
-            if xr[0] <= cx <= xr[1] and yr[0] <= cy <= yr[1]:
-                return seat_id
-        return "master_driver"
+    def classify(bbox, img_w: int, img_h: int, all_bboxes: list = None) -> str:
+        cx = (bbox[0] + bbox[2]) / 2
+        nx = cx / img_w
+        is_front = SeatClassifier._is_front_row(bbox, all_bboxes, img_w, img_h)
+        if is_front:
+            return "co_driver" if nx < 0.50 else "master_driver"
+        else:
+            if nx < 0.44:
+                return "posterior_left"
+            elif nx < 0.56:
+                return "posterior_right"
+            else:
+                return "after_the_middle"
+
+    @staticmethod
+    def _is_front_row(bbox, all_bboxes: list, img_w: int, img_h: int) -> bool:
+        if not all_bboxes or len(all_bboxes) == 1:
+            return (bbox[2] - bbox[0]) / img_w > 0.12
+
+        n = len(all_bboxes)
+        y_coords = [(b[1] + b[3]) / 2 / img_h for b in all_bboxes]
+        sorted_y = sorted(y_coords)
+        y_span = sorted_y[-1] - sorted_y[0]
+
+        if n >= 3 and y_span < 0.06:
+            # Y集中 -> 用宽度聚类区分前排/后排
+            widths = [(b[2]-b[0])/img_w for b in all_bboxes]
+            sorted_w = sorted(widths)
+            # 找最大相对间隙作为分界
+            max_ratio = 0
+            split_i = 0
+            for i in range(len(sorted_w)-1):
+                if sorted_w[i] > 1e-6:
+                    r = sorted_w[i+1] / sorted_w[i]
+                    if r > max_ratio:
+                        max_ratio = r
+                        split_i = i
+            if max_ratio > 2.0:
+                # 有宽度分层 -> 间隙右侧(更宽)的是前排
+                my_w = (bbox[2]-bbox[0])/img_w
+                return my_w >= sorted_w[split_i + 1] - 1e-9
+            # 宽度相近 -> 后排
+            return False
+
+        if n == 2:
+            if y_span > 0.12:
+                my_ny = (bbox[1] + bbox[3]) / 2 / img_h
+                return my_ny > (sorted_y[0] + sorted_y[-1]) / 2
+            avg_w = sum((b[2]-b[0])/img_w for b in all_bboxes) / 2
+            return avg_w > 0.10
+
+        # 3+脸, Y有分层 -> K-means K=2
+        c0, c1 = sorted_y[0], sorted_y[-1]
+        for _ in range(20):
+            g0, g1 = [], []
+            for y in y_coords:
+                if abs(y - c0) <= abs(y - c1):
+                    g0.append(y)
+                else:
+                    g1.append(y)
+            if not g0 or not g1:
+                break
+            nc0, nc1 = sum(g0)/len(g0), sum(g1)/len(g1)
+            if abs(nc0-c0) < 1e-8 and abs(nc1-c1) < 1e-8:
+                break
+            c0, c1 = nc0, nc1
+
+        cnt0 = sum(1 for y in y_coords if abs(y-c0) <= abs(y-c1))
+        cnt1 = n - cnt0
+
+        if cnt0 <= 2 and cnt1 > 2:
+            fc = 0
+        elif cnt1 <= 2 and cnt0 > 2:
+            fc = 1
+        elif cnt0 <= 2 and cnt1 <= 2:
+            fc = 1 if c1 > c0 else 0
+        else:
+            avg_w = sum((b[2]-b[0])/img_w for b in all_bboxes) / n
+            return avg_w > 0.06
+
+        my_ny = (bbox[1] + bbox[3]) / 2 / img_h
+        mc = 0 if abs(my_ny-c0) <= abs(my_ny-c1) else 1
+        return mc == fc
 
     @staticmethod
     def get_label(seat_id: str) -> str:
