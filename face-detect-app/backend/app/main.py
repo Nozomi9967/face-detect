@@ -188,11 +188,14 @@ async def server_info():
     import os
     public_ip = os.environ.get("PUBLIC_IP", "")
     port = int(os.environ.get("PORT", "80"))
+    base_path = os.environ.get("BASE_PATH", "")
     if public_ip:
-        url = f"http://{public_ip}:{port}" if port not in (80, 443) else f"http://{public_ip}"
+        host = f"http://{public_ip}" if port in (80, 443) else f"http://{public_ip}:{port}"
     else:
         ip = _get_lan_ip()
-        url = f"http://{ip}:{port}"
+        host = f"http://{ip}:{port}"
+    # 拼上路径前缀（生产环境 Nginx 代理路径，如 /face）
+    url = host + base_path if base_path else host
     return {"url": url}
 
 

@@ -107,6 +107,9 @@
             color: #5f6368;
             margin-bottom: 8px;
         }
+        .manual-card input::placeholder {
+            color: #b0b0b0;
+        }
         .manual-card input {
             width: 100%;
             padding: 12px 14px;
@@ -173,7 +176,7 @@
     <!-- 手动输入 -->
     <div class="manual-card">
         <label for="manualUrl">方式二：手动输入地址</label>
-        <input type="text" id="manualUrl" placeholder="http://192.168.x.x:8000" />
+        <input type="text" id="manualUrl" placeholder="http://server-ip:8000 或 http://公网IP/face/" />
         <div class="error-msg" id="errorMsg"></div>
     </div>
 

@@ -236,6 +236,7 @@ Restart=always
 RestartSec=5
 Environment="PYTHONUNBUFFERED=1"
 Environment="PUBLIC_IP=<公网IP地址>"
+Environment="BASE_PATH=/face"
 
 [Install]
 WantedBy=multi-user.target
