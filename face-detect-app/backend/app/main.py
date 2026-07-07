@@ -175,10 +175,10 @@ async def detect_batch(files: list[UploadFile] = File(...)):
 @app.get("/api/seat-zones")
 async def get_seat_zones():
     """获取当前座位区域配置"""
-    from app.seat_classifier import SEAT_ZONES, COLOR_MAP
+    from app.seat_classifier import SEAT_ZONES, COLOR_MAP_RGB
     return {
         "zones": SEAT_ZONES,
-        "colors": {k: list(v) for k, v in COLOR_MAP.items()},
+        "colors": {k: list(v) for k, v in COLOR_MAP_RGB.items()},
     }
 
 
@@ -198,15 +198,38 @@ async def setup_page():
 
 
 def _get_lan_ip() -> str:
-    """获取本机的局域网 IP 地址"""
+    """获取本机的局域网/公网 IP 地址（跳过 Docker 等虚拟网卡）"""
+    import socket, os
     try:
+        candidates = []
+        try:
+            hostname = socket.gethostname()
+            for info in socket.getaddrinfo(hostname, None):
+                ip = info[4][0]
+                if (ip.startswith("10.") or ip.startswith("172.") or
+                        ip.startswith("192.168.")):
+                    candidates.append(ip)
+        except Exception:
+            pass
+        for ip in candidates:
+            return ip
+        # fallback: same trick but skip Docker
+        for interface in ["eth0", "ens3", "ens4", "bond0", "eno1"]:
+            try:
+                ip = os.popen(f"ip -4 addr show {interface} 2>/dev/null | grep -oP '(?<=inet )\\d+(\\.\\d+){{3}}'").read().strip()
+                if ip:
+                    return ip
+            except Exception:
+                continue
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         s.connect(("8.8.8.8", 80))
         ip = s.getsockname()[0]
         s.close()
+        if ip.startswith("172."):
+            return "47.98.57.132"
         return ip
     except Exception:
-        return "127.0.0.1"
+        return "0.0.0.0"
 
 
 if __name__ == "__main__":
