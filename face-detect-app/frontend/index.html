@@ -388,7 +388,7 @@
             formData.append('file', file);
 
             try {
-                const resp = await fetch('/api/detect', {
+                const resp = await fetch('./api/detect', {
                     method: 'POST',
                     body: formData,
                 });
@@ -413,7 +413,7 @@
             }
 
             try {
-                const resp = await fetch('/api/detect-batch', {
+                const resp = await fetch('./api/detect-batch', {
                     method: 'POST',
                     body: formData,
                 });
@@ -592,7 +592,7 @@
             const connectBtn = document.getElementById('connectBtn');
 
             try {
-                const resp = await fetch('/api/server-info');
+                const resp = await fetch('./api/server-info');
                 if (!resp.ok) throw new Error('Failed');
                 const data = await resp.json();
                 const url = data.url;

@@ -185,8 +185,14 @@ async def get_seat_zones():
 @app.get("/api/server-info")
 async def server_info():
     """返回服务器地址，供手机配网页面获取"""
-    port = 8000
-    url = f"http://{_get_lan_ip()}:{port}"
+    import os
+    public_ip = os.environ.get("PUBLIC_IP", "")
+    port = int(os.environ.get("PORT", "80"))
+    if public_ip:
+        url = f"http://{public_ip}:{port}" if port not in (80, 443) else f"http://{public_ip}"
+    else:
+        ip = _get_lan_ip()
+        url = f"http://{ip}:{port}"
     return {"url": url}
 
 
@@ -198,35 +204,33 @@ async def setup_page():
 
 
 def _get_lan_ip() -> str:
-    """获取本机的局域网/公网 IP 地址（跳过 Docker 等虚拟网卡）"""
-    import socket, os
+    """获取本机的公网/LAN IP 地址"""
+    import subprocess
     try:
-        candidates = []
-        try:
-            hostname = socket.gethostname()
-            for info in socket.getaddrinfo(hostname, None):
-                ip = info[4][0]
-                if (ip.startswith("10.") or ip.startswith("172.") or
-                        ip.startswith("192.168.")):
-                    candidates.append(ip)
-        except Exception:
-            pass
-        for ip in candidates:
-            return ip
-        # fallback: same trick but skip Docker
-        for interface in ["eth0", "ens3", "ens4", "bond0", "eno1"]:
-            try:
-                ip = os.popen(f"ip -4 addr show {interface} 2>/dev/null | grep -oP '(?<=inet )\\d+(\\.\\d+){{3}}'").read().strip()
-                if ip:
-                    return ip
-            except Exception:
-                continue
+        # 获取所有非回环、非 docker 的 IPv4 地址
+        result = subprocess.run(
+            ["ip", "-4", "-o", "addr", "show"],
+            capture_output=True, text=True, timeout=5
+        )
+        for line in result.stdout.strip().split("\n"):
+            parts = line.split()
+            if len(parts) >= 3:
+                iface = parts[1]
+                if iface == "lo":
+                    continue
+                if iface.startswith("docker") or iface.startswith("br-"):
+                    continue
+                addr = parts[3].split("/")[0]
+                if not addr.startswith("127."):
+                    return addr
+    except Exception:
+        pass
+    # fallback
+    try:
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         s.connect(("8.8.8.8", 80))
         ip = s.getsockname()[0]
         s.close()
-        if ip.startswith("172."):
-            return "47.98.57.132"
         return ip
     except Exception:
         return "0.0.0.0"

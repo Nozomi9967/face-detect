@@ -209,7 +209,7 @@
 
         async function init() {
             try {
-                const resp = await fetch('/api/server-info');
+                const resp = await fetch('./api/server-info');
                 if (!resp.ok) throw new Error('Failed');
                 const data = await resp.json();
                 serverUrl = data.url;
