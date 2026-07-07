@@ -152,3 +152,193 @@ cd android
 build-debug.bat
 adb install app/build/outputs/apk/debug/app-debug.apk
 ```
+
+---
+
+## 生产环境部署
+
+### 服务器环境要求
+
+- OS: Linux (CentOS / Alibaba Cloud Linux / Ubuntu)
+- Python: >= 3.10
+- Nginx: >= 1.18
+- 内存: >= 4GB (建议 7GB+，YOLO 模型加载约需 600MB)
+- 磁盘: >= 5GB (含模型文件)
+
+### 服务架构
+
+```
+公网用户 (80端口)
+  ├── http://<ip>/        → Nozomi-House (前端 SPA)
+  └── http://<ip>/face/   → Face Detect 服务
+```
+
+Face Detect 通过 Nginx 反向代理共享 80 端口，路径前缀 `/face/`。后端 FastAPI 服务监听 `127.0.0.1:8000`，不对外暴露。
+
+### 服务器目录结构
+
+```
+/opt/face-detect/                    # 项目根目录（Nginx 可读）
+├── frontend/                        # 静态文件
+│   ├── index.html                   # 检测主页面
+│   └── setup.html                   # 配网页面
+├── backend/                         # Python 后端
+│   ├── venv/                        # Python 虚拟环境
+│   ├── app/
+│   │   ├── main.py
+│   │   ├── detector.py
+│   │   ├── recognizer.py
+│   │   ├── seat_classifier.py
+│   │   └── pipeline.py
+│   └── requirements.txt
+├── data/
+│   ├── uploads/                     # 上传图片
+│   └── results/                     # 检测结果
+└── yolov8n-face-lindevs.pt         # 模型权重
+
+/usr/share/nginx/html/face-detect/   # Nginx 前端文件（软链接或复制）
+/etc/nginx/conf.d/nozomi.conf        # Nginx 配置（追加 face-detect 路由）
+/etc/systemd/system/face-detect.service  # systemd 服务单元
+```
+
+### 部署步骤
+
+#### 1. 克隆代码
+
+```bash
+git clone <repo-url> /opt/face-detect
+cd /opt/face-detect
+```
+
+#### 2. 创建 Python 虚拟环境
+
+```bash
+cd backend
+python3 -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+```
+
+#### 3. 配置 systemd 服务
+
+文件 `/etc/systemd/system/face-detect.service`：
+
+```ini
+[Unit]
+Description=Face Detect API Service
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/face-detect/backend
+ExecStart=/opt/face-detect/backend/venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8000 --workers 2
+Restart=always
+RestartSec=5
+Environment="PYTHONUNBUFFERED=1"
+Environment="PUBLIC_IP=<公网IP地址>"
+
+[Install]
+WantedBy=multi-user.target
+```
+
+```bash
+mkdir -p /opt/face-detect/data/uploads /opt/face-detect/data/results
+systemctl daemon-reload
+systemctl enable face-detect
+systemctl start face-detect
+```
+
+#### 4. 部署前端文件
+
+```bash
+mkdir -p /usr/share/nginx/html/face-detect
+cp /opt/face-detect/frontend/* /usr/share/nginx/html/face-detect/
+chmod 755 /usr/share/nginx/html/face-detect
+chmod 644 /usr/share/nginx/html/face-detect/*
+```
+
+#### 5. 配置 Nginx
+
+在现有 Nginx `server` 块末尾（`}` 之前）追加：
+
+```nginx
+# ---- Face Detect (port 8000) ----
+location = /face/index.html {
+    alias /usr/share/nginx/html/face-detect/index.html;
+}
+location = /face/setup.html {
+    alias /usr/share/nginx/html/face-detect/setup.html;
+}
+location /face/ {
+    alias /usr/share/nginx/html/face-detect/;
+    index index.html;
+    try_files $uri $uri/ =404;
+}
+location /face/api/ {
+    proxy_pass http://127.0.0.1:8000/api/;
+    client_max_body_size 50M;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+}
+```
+
+```bash
+nginx -t && systemctl reload nginx
+```
+
+#### 6. 验证
+
+```bash
+# 后端服务
+curl http://127.0.0.1:8000/api/health
+# → {"status":"ok","message":"多人脸检测服务运行中"}
+
+# Nginx 前端
+curl http://127.0.0.1/face/ | head -3
+# → 应返回 HTML 页面
+
+# Nginx API 代理
+curl http://127.0.0.1/face/api/seat-zones
+# → 返回 JSON 座位配置
+
+# 确认原有服务不受影响
+curl http://127.0.0.1/ | head -3
+# → 应返回原有 Nozomi-House 页面
+```
+
+### 常用运维命令
+
+```bash
+# 查看服务状态
+systemctl status face-detect
+
+# 查看日志
+journalctl -u face-detect -f
+
+# 重启服务
+systemctl restart face-detect
+
+# 更新前端文件后同步
+cp frontend/index.html /usr/share/nginx/html/face-detect/
+systemctl reload nginx
+
+# 更新后端代码后重启
+cp backend/app/main.py /opt/face-detect/backend/app/main.py
+systemctl restart face-detect
+```
+
+### 在线访问
+
+| 服务 | 地址 |
+|------|------|
+| Face Detect 主页面 | `http://<服务器IP>/face/` |
+| Face Detect 配网页 | `http://<服务器IP>/face/setup.html` |
+| Nozomi-House（原有） | `http://<服务器IP>/` |
+
+### 注意事项
+
+- Nginx worker 进程以 `nginx` 用户运行，前端文件需放在 Nginx 可读的目录（如 `/usr/share/nginx/html/`），`/root/` 等目录无法访问
+- `/face/api/` 路径下的请求会被 Nginx 代理到 FastAPI，前端 JS 中使用相对路径 `./api/` 而非绝对路径 `/api/`
+- `PUBLIC_IP` 环境变量用于让 `server-info` 接口返回正确的公网地址，供配网页面使用
+- 模型文件 `yolov8n-face-lindevs.pt`（约 6MB）需与代码同步到服务器
