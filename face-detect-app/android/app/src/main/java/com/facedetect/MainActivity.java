@@ -49,10 +49,8 @@ public class MainActivity extends AppCompatActivity {
     private Uri cameraPhotoUri;
     private boolean needCameraCapture = false;
 
-    // Default server address (change to your actual server IP/domain before building)
-    private static final String DEFAULT_SERVER_URL = "http://YOUR_SERVER_IP:8000";
-
-    private String currentServerUrl;
+    // Default server address (used when no saved config exists)
+    private static final String DEFAULT_SERVER_URL = "http://10.200.128.188:8000";
 
     @SuppressLint("SetJavaScriptEnabled")
     @Override
@@ -133,26 +131,14 @@ public class MainActivity extends AppCompatActivity {
         webView.addJavascriptInterface(new JsBridge(this), "AndroidBridge");
 
         // Load the frontend
-        currentServerUrl = getServerUrl();
-        if (currentServerUrl.endsWith("/")) currentServerUrl = currentServerUrl.substring(0, currentServerUrl.length() - 1);
-        webView.loadUrl(currentServerUrl + "/");
+        String serverUrl = getServerUrl();
+        if (serverUrl.endsWith("/")) serverUrl = serverUrl.substring(0, serverUrl.length() - 1);
+        webView.loadUrl(serverUrl + "/");
         progressBar.setVisibility(View.VISIBLE);
 
         // Request permissions on app startup
         if (!checkAllPermissions()) {
             requestPermissions();
-        }
-    }
-
-    @Override
-    protected void onResume() {
-        super.onResume();
-        String newUrl = getServerUrl();
-        String normalizedNew = newUrl.endsWith("/") ? newUrl.substring(0, newUrl.length() - 1) : newUrl;
-        if (!normalizedNew.equals(currentServerUrl)) {
-            currentServerUrl = normalizedNew;
-            webView.loadUrl(currentServerUrl + "/");
-            progressBar.setVisibility(View.VISIBLE);
         }
     }
 
