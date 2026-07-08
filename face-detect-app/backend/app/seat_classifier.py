@@ -11,6 +11,8 @@ from collections import defaultdict
 from typing import Optional
 
 # ─── 座位区域定义（基于真实车内俯视视角）───
+# 前排人脸中心通常在 y=0.30-0.50，后排在 y=0.25-0.40
+# 通过Y坐标细分为前排/后排，再通过X区分左右
 SEAT_ZONES = {
     "co_driver":       {"x_range": (0.00, 0.40), "y_range": (0.30, 0.55), "label": "副驾"},
     "master_driver":   {"x_range": (0.60, 1.00), "y_range": (0.30, 0.55), "label": "主驾"},
@@ -19,6 +21,7 @@ SEAT_ZONES = {
     "after_the_middle":{"x_range": (0.65, 0.90), "y_range": (0.25, 0.50), "label": "后排右"},
 }
 
+# 颜色映射 (RGB for PIL, BGR for cv2)
 COLOR_MAP_RGB = {
     "posterior_left":  (255, 100, 100),
     "posterior_right": (100, 255, 100),
@@ -43,6 +46,7 @@ FONT_PATHS = [
 
 
 def _get_font(size: int = 20):
+    """加载中文字体"""
     for path in FONT_PATHS:
         if Path(path).exists():
             try:
@@ -54,6 +58,10 @@ def _get_font(size: int = 20):
 
 class SeatClassifier:
     """基于人脸框坐标 + 大小的规则座位分类"""
+
+    @staticmethod
+    def _bbox_key(bbox) -> tuple:
+        return tuple(round(float(v), 3) for v in bbox)
 
     @staticmethod
     def classify(bbox, img_w: int, img_h: int, all_bboxes: list = None) -> str:
@@ -71,184 +79,156 @@ class SeatClassifier:
                 return "after_the_middle"
 
     @staticmethod
-    def _normalized_height(bbox, img_h: int) -> float:
-        return (bbox[3] - bbox[1]) / img_h
-
-    @staticmethod
-    def _normalized_area(bbox, img_w: int, img_h: int) -> float:
-        return (bbox[2] - bbox[0]) * (bbox[3] - bbox[1]) / (img_w * img_h)
-
-    @staticmethod
-    def _find_bbox_index(bbox, all_bboxes: list) -> int:
-        for i, b in enumerate(all_bboxes):
-            if b == bbox:
-                return i
-        for i, b in enumerate(all_bboxes):
-            if abs(b[0] - bbox[0]) < 2 and abs(b[1] - bbox[1]) < 2:
-                return i
-        return None
-
-    @staticmethod
     def _is_front_row(bbox, all_bboxes: list, img_w: int, img_h: int) -> bool:
-        """
-        Determine if a face is in the front row (driver / co-driver).
-
-        Uses 2-means clustering on weighted [height, Y-center] features.
-        Y-center has 3x weight because it's the more reliable row separator
-        (camera is always behind front row looking forward).
-
-        Algorithm:
-        1. Single face: height > 0.13 → front
-        2. Global filters for unambiguous all-back cases:
-           - ALL faces Y-center > 0.50: all back (camera behind back seats)
-           - ALL faces Y-center < 0.40 AND max height < 0.17: all back
-             (test1/2: camera far behind car)
-        3. 2-means on [height, 3*Y-center]:
-           - Seed centroids from tallest/shortest faces
-           - Iteratively assign by Manhattan distance
-           - Taller cluster = front row
-        4. Mixed-row correction:
-           a) Tallest-in-back flip (single tall face isolated in back cluster)
-           b) Y-deviation: remove front-cluster faces whose Y-center deviates
-              > 0.06 from front centroid (turned-aside back-row faces)
-           c) X-range check: if front cluster spans > 0.50 in normalized X,
-              only the face closest to center (nx≈0.50) stays in front.
-              This handles test4: rear-left lady (nx=0.228) and driver
-              (nx=0.947) have similar Y-centers but 0.72 nx apart.
-        """
-        if not all_bboxes:
-            return False
+        if not all_bboxes or len(all_bboxes) == 1:
+            x1, y1, x2, y2 = map(float, bbox)
+            nx = ((x1 + x2) / 2) / img_w
+            ny = ((y1 + y2) / 2) / img_h
+            width = (x2 - x1) / img_w
+            area = ((x2 - x1) * (y2 - y1)) / (img_w * img_h)
+            side_position = abs(nx - 0.5) >= 0.18
+            front_sized = width >= 0.08 or area >= 0.010
+            lower_half = ny >= 0.28
+            return front_sized and (side_position or lower_half)
 
         n = len(all_bboxes)
-        heights = [SeatClassifier._normalized_height(b, img_h) for b in all_bboxes]
-        areas = [SeatClassifier._normalized_area(b, img_w, img_h) for b in all_bboxes]
-        y_centers = [(b[1] + b[3]) / 2 / img_h for b in all_bboxes]
-        my_h = SeatClassifier._normalized_height(bbox, img_h)
+        metrics = []
+        for b in all_bboxes:
+            x1, y1, x2, y2 = map(float, b)
+            bw = max(1.0, x2 - x1)
+            bh = max(1.0, y2 - y1)
+            metrics.append({
+                "bbox": b,
+                "key": SeatClassifier._bbox_key(b),
+                "nx": ((x1 + x2) / 2) / img_w,
+                "ny": ((y1 + y2) / 2) / img_h,
+                "w": bw / img_w,
+                "area": (bw * bh) / (img_w * img_h),
+            })
 
-        if n == 1:
-            return my_h > 0.13
+        y_coords = [(b[1] + b[3]) / 2 / img_h for b in all_bboxes]
+        sorted_y = sorted(y_coords)
+        y_span = sorted_y[-1] - sorted_y[0]
 
-        # ── Signal 1: Y-position global filters ──
-        if min(y_centers) > 0.50:
-            return False  # all faces low in image → camera behind back seats
-        if max(y_centers) < 0.40 and max(heights) < 0.17:
-            return False  # all faces high + small → camera far behind car
+        # 车内广角图里，前排乘员通常在画面左右两侧且脸框更大；
+        # 仅靠 Y 坐标会把前排误判成后排，尤其是三人/五人座舱图。
+        if n >= 3:
+            front_keys = SeatClassifier._front_candidates_by_position(metrics)
+            if front_keys:
+                return SeatClassifier._bbox_key(bbox) in front_keys
 
-        # ── Signal 2: 2-means on weighted [height, Y-center] ──
-        front_indices, back_indices = SeatClassifier._kmeans2(
-            heights, y_centers, areas,
-        )
-
-        # Check if this face is in the final front cluster
-        my_idx = SeatClassifier._find_bbox_index(bbox, all_bboxes)
-        if my_idx is None or my_idx not in front_indices:
+        if n >= 3 and y_span < 0.06:
+            # Y集中 -> 用宽度聚类区分前排/后排
+            widths = [(b[2]-b[0])/img_w for b in all_bboxes]
+            sorted_w = sorted(widths)
+            # 找最大相对间隙作为分界
+            max_ratio = 0
+            split_i = 0
+            for i in range(len(sorted_w)-1):
+                if sorted_w[i] > 1e-6:
+                    r = sorted_w[i+1] / sorted_w[i]
+                    if r > max_ratio:
+                        max_ratio = r
+                        split_i = i
+            if max_ratio > 2.0:
+                # 有宽度分层 -> 间隙右侧(更宽)的是前排
+                my_w = (bbox[2]-bbox[0])/img_w
+                return my_w >= sorted_w[split_i + 1] - 1e-9
+            # 宽度相近 -> 后排
             return False
 
-        return True
+        if n == 2:
+            if y_span > 0.12:
+                my_ny = (bbox[1] + bbox[3]) / 2 / img_h
+                return my_ny > (sorted_y[0] + sorted_y[-1]) / 2
+            avg_w = sum((b[2]-b[0])/img_w for b in all_bboxes) / 2
+            return avg_w > 0.08
+
+        # 3+脸, Y有分层 -> K-means K=2
+        c0, c1 = sorted_y[0], sorted_y[-1]
+        for _ in range(20):
+            g0, g1 = [], []
+            for y in y_coords:
+                if abs(y - c0) <= abs(y - c1):
+                    g0.append(y)
+                else:
+                    g1.append(y)
+            if not g0 or not g1:
+                break
+            nc0, nc1 = sum(g0)/len(g0), sum(g1)/len(g1)
+            if abs(nc0-c0) < 1e-8 and abs(nc1-c1) < 1e-8:
+                break
+            c0, c1 = nc0, nc1
+
+        cnt0 = sum(1 for y in y_coords if abs(y-c0) <= abs(y-c1))
+        cnt1 = n - cnt0
+
+        if cnt0 <= 2 and cnt1 > 2:
+            fc = 0
+        elif cnt1 <= 2 and cnt0 > 2:
+            fc = 1
+        elif cnt0 <= 2 and cnt1 <= 2:
+            fc = 1 if c1 > c0 else 0
+        else:
+            avg_w = sum((b[2]-b[0])/img_w for b in all_bboxes) / n
+            return avg_w > 0.06
+
+        my_ny = (bbox[1] + bbox[3]) / 2 / img_h
+        mc = 0 if abs(my_ny-c0) <= abs(my_ny-c1) else 1
+        return mc == fc
 
     @staticmethod
-    def _kmeans2(heights, y_centers, areas):
-        """
-        2-means clustering on weighted [height, Y-center] features.
-        Y-center has 3x weight because row separation depends more on
-        vertical position than face size.
+    def _front_candidates_by_position(metrics: list[dict]) -> set:
+        if not metrics:
+            return set()
 
-        Returns (front_indices, back_indices) where front = taller-mean cluster.
-        """
-        n = len(heights)
-        # Weighted features: [height, 3*Y-center]
-        WEIGHT = 3.0
-        features = [np.array([heights[i], WEIGHT * y_centers[i]]) for i in range(n)]
+        widths = sorted(m["w"] for m in metrics)
+        median_w = widths[len(widths) // 2]
+        areas = sorted(m["area"] for m in metrics)
+        median_area = areas[len(areas) // 2]
+        median_y = sorted(m["ny"] for m in metrics)[len(metrics) // 2]
 
-        # Seed centroids: tallest and shortest face
-        tallest_idx = max(range(n), key=lambda i: heights[i])
-        shortest_idx = min(range(n), key=lambda i: heights[i])
-        c1 = features[tallest_idx]  # front seed
-        c2 = features[shortest_idx]  # back seed
+        if len(metrics) == 3:
+            by_x = sorted(metrics, key=lambda m: m["nx"])
+            middle = by_x[1]
+            side_width_ratio = min(by_x[0]["w"], by_x[2]["w"]) / max(middle["w"], 1e-6)
+            side_area_ratio = min(by_x[0]["area"], by_x[2]["area"]) / max(middle["area"], 1e-6)
+            y_span = max(m["ny"] for m in metrics) - min(m["ny"] for m in metrics)
+            # 三人后排横向排布时，人脸通常同一高度且大小接近。
+            # 只有左右两侧明显比中间更大时，才认为它们可能是前排。
+            if y_span < 0.08 and side_width_ratio < 1.35 and side_area_ratio < 1.55:
+                return set()
 
-        # Iterative assignment
-        for _ in range(20):
-            front = []
-            back = []
-            for i in range(n):
-                d1 = np.abs(features[i] - c1).sum()
-                d2 = np.abs(features[i] - c2).sum()
-                if d1 <= d2:
-                    front.append(i)
-                else:
-                    back.append(i)
+        def score(m):
+            side_score = abs(m["nx"] - 0.5)
+            width_score = m["w"] / max(widths[-1], 1e-6)
+            area_score = m["area"] / max(areas[-1], 1e-6)
+            # 前排常常更靠下，但广角图里驾驶员脸框可能偏高，所以只作为弱信号。
+            y_score = 0.12 if m["ny"] >= median_y else 0.0
+            return side_score * 0.35 + width_score * 0.45 + area_score * 0.20 + y_score
 
-            if not front or not back:
-                break
+        def plausible_front(m):
+            side_enough = abs(m["nx"] - 0.5) >= 0.12
+            size_enough = m["w"] >= median_w * 0.90 or m["area"] >= median_area * 0.90
+            return side_enough and size_enough
 
-            new_c1 = np.mean([features[i] for i in front], axis=0)
-            new_c2 = np.mean([features[i] for i in back], axis=0)
-            if np.allclose(new_c1, c1) and np.allclose(new_c2, c2):
-                break
-            c1, c2 = new_c1, new_c2
+        front = []
+        left = [m for m in metrics if m["nx"] < 0.5]
+        right = [m for m in metrics if m["nx"] >= 0.5]
 
-        # Taller cluster = front row
-        if front:
-            front_mean_h = sum(heights[i] for i in front) / len(front)
-        else:
-            front_mean_h = 0
-        if back:
-            back_mean_h = sum(heights[i] for i in back) / len(back)
-        else:
-            back_mean_h = 0
+        for group in (left, right):
+            if not group:
+                continue
+            best = max(group, key=score)
+            if plausible_front(best):
+                front.append(best)
 
-        if front_mean_h < back_mean_h:
-            front, back = back, front
+        if len(front) == 2:
+            return {m["key"] for m in front}
 
-        # ── Mixed-row correction (ALL cases, not just len(front)>=2) ──
-        # If the tallest face ended up alone in the "back" cluster, flip.
-        # This handles test6: a tall back-row face near the camera gets
-        # isolated in the wrong cluster.
-        if len(front) == 1 and len(back) >= 2:
-            tallest_in_back = max(heights[i] for i in back)
-            tallest_in_front = heights[front[0]]
-            if tallest_in_back > tallest_in_front:
-                front, back = back, front
-
-        # Within the front cluster, remove faces whose Y-center deviates
-        # > 0.06 from the front centroid (turned-aside back-row faces).
-        if len(front) >= 2:
-            front_mean_y = sum(y_centers[i] for i in front) / len(front)
-            corrected = []
-            for idx in front:
-                if abs(y_centers[idx] - front_mean_y) > 0.06:
-                    back.append(idx)
-                else:
-                    corrected.append(idx)
-            front = corrected
-
-        # Height-ratio guard: if remaining front faces have height ratio > 2.0,
-        # the shorter one is likely a back-row face at a different distance
-        # (not a genuine front-row passenger).
-        # test4: front=[lady h=0.141, driver h=0.334], ratio=2.37 -> remove lady.
-        # test3: front=[0.204, 0.227], ratio=1.11 -> no effect.
-        if len(front) >= 2:
-            front_heights = [heights[i] for i in front]
-            if max(front_heights) / min(front_heights) > 2.0:
-                shortest_in_front = min(front, key=lambda i: heights[i])
-                front.remove(shortest_in_front)
-                back.append(shortest_in_front)
-
-        # ── All-back detection ──
-        # If front cluster's Y-center range is fully inside back cluster's
-        # range, all faces are in the same row (back).
-        # Only meaningful when front has >= 2 faces (single-face front
-        # always has zero range, trivially inside any back range).
-        if front and back and len(front) >= 2:
-            front_y_min = min(y_centers[i] for i in front)
-            front_y_max = max(y_centers[i] for i in front)
-            back_y_min = min(y_centers[i] for i in back)
-            back_y_max = max(y_centers[i] for i in back)
-            if back_y_min <= front_y_min and front_y_max <= back_y_max:
-                front = []
-                back = list(range(len(heights)))
-
-        return front, back
+        # 如果某侧没有候选，退化为全局挑选最多两个最像前排的人脸。
+        ranked = [m for m in sorted(metrics, key=score, reverse=True) if plausible_front(m)]
+        return {m["key"] for m in ranked[:2]} if len(ranked) >= 2 else set()
 
     @staticmethod
     def get_label(seat_id: str) -> str:
@@ -267,6 +247,7 @@ class FaceAnnotator:
         vis = image.copy()
         h, w = vis.shape[:2]
 
+        # 转换为 PIL Image
         pil_img = Image.fromarray(cv2.cvtColor(vis, cv2.COLOR_BGR2RGB))
         draw = ImageDraw.Draw(pil_img)
         font = _get_font(18)
@@ -277,20 +258,27 @@ class FaceAnnotator:
             color_rgb = COLOR_MAP_RGB.get(seat, (200, 200, 200))
             label = f"{SeatClassifier.get_label(seat)} ID:{f.get('person_id', f.get('id', '?'))}"
 
+            # 绘制矩形框
             draw.rectangle([x1, y1, x2, y2], outline=color_rgb, width=3)
 
+            # 计算文字大小
             bbox_text = draw.textbbox((0, 0), label, font=font)
             tw = bbox_text[2] - bbox_text[0]
             th = bbox_text[3] - bbox_text[1]
 
+            # 标签背景
             label_y = max(0, y1 - th - 8)
             draw.rectangle([x1, label_y, x1 + tw + 12, y1], fill=color_rgb)
+
+            # 标签文字（白色）
             draw.text((x1 + 6, label_y + 2), label, font=font, fill=(255, 255, 255))
 
+            # 置信度
             if f.get("conf"):
                 conf_text = f"{f['conf']:.2f}"
                 draw.text((x1, y2 + 4), conf_text, font=font, fill=color_rgb)
 
+        # 转回 OpenCV 格式
         return cv2.cvtColor(np.array(pil_img), cv2.COLOR_RGB2BGR)
 
     @staticmethod

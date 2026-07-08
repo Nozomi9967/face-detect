@@ -1,0 +1,10 @@
+﻿case_id,image_file,mode,expected_faces,actual_faces,expected_seats,actual_seats,result,issue_note,tester
+TC-HH-001,data/curated/batch/batch_001.png,batch,unknown,,unknown,,pending,待后端接口稳定后填写实际检测结果,侯贺升
+TC-HH-002,data/curated/batch/batch_002.png,batch,unknown,,unknown,,pending,待后端接口稳定后填写实际检测结果,侯贺升
+TC-HH-003,data/curated/edge/edge_001.jpg,single,unknown,,unknown,,pending,待后端接口稳定后填写实际检测结果,侯贺升
+TC-HH-004,data/curated/five_seat/five_seat_001.png,single,5,,主驾;副驾;后排左;后排中;后排右,,pending,待后端接口稳定后填写实际检测结果,侯贺升
+TC-HH-005,data/curated/five_seat/five_seat_002.png,single,5,,主驾;副驾;后排左;后排中;后排右,,pending,待后端接口稳定后填写实际检测结果,侯贺升
+TC-HH-006,data/curated/batch/batch_003.png,batch,unknown,,unknown,,pending,待后端接口稳定后填写实际检测结果,侯贺升
+TC-HH-007,data/curated/batch/batch_004.png,batch,unknown,,unknown,,pending,待后端接口稳定后填写实际检测结果,侯贺升
+TC-HH-008,data/curated/batch/batch_005.png,batch,unknown,,unknown,,pending,待后端接口稳定后填写实际检测结果,侯贺升
+TC-HH-009,data/curated/batch/batch_006.png,batch,unknown,,unknown,,pending,待后端接口稳定后填写实际检测结果,侯贺升
