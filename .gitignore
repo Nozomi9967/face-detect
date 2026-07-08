@@ -36,6 +36,10 @@ extract_docx.py                     # docx 提取脚本
 unpacked/                           # docx 解压中间目录
 face-detect-app/backend/test_*.jpg  # 测试/调试图片
 face-detect-app/data/               # 运行时数据目录（uploads/results）
+face-detect-app/data/uploads/[0-9]*
+face-detect-app/data/results/result_[0-9]*
+face-detect-app/data/results/batch_[0-9]*
+doc/~$*.docx
 face-detect-app/backend/*.jpg       # 调试图片
 face-detect-app/android/.gradle/    # Gradle 构建缓存
 face-detect-app/android/build/      # Gradle 构建输出

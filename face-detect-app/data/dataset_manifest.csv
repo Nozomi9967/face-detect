@@ -1,0 +1,57 @@
+﻿file_path,file_name,subset,image_type,expected_faces,expected_seats,test_purpose,status,note
+data/results/result_annotated_001.png,result_annotated_001.png,results,annotated_result,unknown,unknown,检测结果复核/文档截图候选,reference,ok
+data/results/result_annotated_002.png,result_annotated_002.png,results,annotated_result,unknown,unknown,检测结果复核/文档截图候选,reference,ok
+data/results/result_annotated_003.png,result_annotated_003.png,results,annotated_result,unknown,unknown,检测结果复核/文档截图候选,reference,ok
+data/results/result_annotated_004.png,result_annotated_004.png,results,annotated_result,unknown,unknown,检测结果复核/文档截图候选,reference,ok
+data/results/result_annotated_005.png,result_annotated_005.png,results,annotated_result,unknown,unknown,检测结果复核/文档截图候选,reference,possible_visual_duplicate
+data/results/result_annotated_006.png,result_annotated_006.png,results,annotated_result,unknown,unknown,检测结果复核/文档截图候选,reference,possible_visual_duplicate
+data/results/result_annotated_007.png,result_annotated_007.png,results,annotated_result,unknown,unknown,检测结果复核/文档截图候选,reference,possible_visual_duplicate
+data/results/result_annotated_008.png,result_annotated_008.png,results,annotated_result,unknown,unknown,检测结果复核/文档截图候选,reference,exact_duplicate
+data/results/result_annotated_009.png,result_annotated_009.png,results,annotated_result,unknown,unknown,检测结果复核/文档截图候选,reference,possible_visual_duplicate
+data/results/result_annotated_010.png,result_annotated_010.png,results,annotated_result,unknown,unknown,检测结果复核/文档截图候选,reference,possible_visual_duplicate
+data/results/result_annotated_011.png,result_annotated_011.png,results,annotated_result,unknown,unknown,检测结果复核/文档截图候选,reference,exact_duplicate
+data/results/result_annotated_012.png,result_annotated_012.png,results,annotated_result,unknown,unknown,检测结果复核/文档截图候选,reference,possible_visual_duplicate
+data/results/result_annotated_013.png,result_annotated_013.png,results,annotated_result,unknown,unknown,检测结果复核/文档截图候选,reference,exact_duplicate
+data/results/result_annotated_014.png,result_annotated_014.png,results,annotated_result,unknown,unknown,检测结果复核/文档截图候选,reference,exact_duplicate
+data/results/result_annotated_015.png,result_annotated_015.png,results,annotated_result,unknown,unknown,检测结果复核/文档截图候选,reference,exact_duplicate
+data/results/result_annotated_016.png,result_annotated_016.png,results,annotated_result,unknown,unknown,检测结果复核/文档截图候选,reference,exact_duplicate
+data/results/result_annotated_017.png,result_annotated_017.png,results,annotated_result,unknown,unknown,检测结果复核/文档截图候选,reference,exact_duplicate
+data/results/result_annotated_018.png,result_annotated_018.png,results,annotated_result,unknown,unknown,检测结果复核/文档截图候选,reference,exact_duplicate
+data/results/result_annotated_019.png,result_annotated_019.png,results,annotated_result,unknown,unknown,检测结果复核/文档截图候选,reference,exact_duplicate
+data/results/result_annotated_020.png,result_annotated_020.png,results,annotated_result,unknown,unknown,检测结果复核/文档截图候选,reference,exact_duplicate
+data/samples/sample_batch_001.png,sample_batch_001.png,batch,ai_cabin_sample,unknown,unknown,批量清洗候选/基础检测样例,review,possible_visual_duplicate
+data/samples/sample_batch_002.png,sample_batch_002.png,batch,ai_cabin_sample,unknown,unknown,批量清洗候选/基础检测样例,review,possible_visual_duplicate
+data/samples/sample_edge_001.jpg,sample_edge_001.jpg,edge,ai_cabin_sample,unknown,unknown,边界样例/需人工复核,review,possible_visual_duplicate
+data/samples/sample_five_seat_001.png,sample_five_seat_001.png,five_seat,ai_cabin_sample,5,主驾;副驾;后排左;后排中;后排右,五座位检测/多人人脸检测,review,possible_visual_duplicate
+data/samples/sample_five_seat_002.png,sample_five_seat_002.png,five_seat,ai_cabin_sample,5,主驾;副驾;后排左;后排中;后排右,五座位检测/多人人脸检测,review,possible_visual_duplicate
+data/uploads/upload_batch_001.png,upload_batch_001.png,batch,uploaded_original,unknown,unknown,历史上传原图/批量清洗候选,review,possible_visual_duplicate
+data/uploads/upload_batch_002.png,upload_batch_002.png,batch,uploaded_original,unknown,unknown,历史上传原图/批量清洗候选,exclude,exact_duplicate
+data/uploads/upload_batch_003.png,upload_batch_003.png,batch,uploaded_original,unknown,unknown,历史上传原图/批量清洗候选,exclude,exact_duplicate
+data/uploads/upload_batch_004.png,upload_batch_004.png,batch,uploaded_original,unknown,unknown,历史上传原图/批量清洗候选,review,possible_visual_duplicate
+data/uploads/upload_batch_005.png,upload_batch_005.png,batch,uploaded_original,unknown,unknown,历史上传原图/批量清洗候选,review,possible_visual_duplicate
+data/uploads/upload_batch_006.png,upload_batch_006.png,batch,uploaded_original,unknown,unknown,历史上传原图/批量清洗候选,review,possible_visual_duplicate
+data/uploads/upload_batch_007.png,upload_batch_007.png,batch,uploaded_original,unknown,unknown,历史上传原图/批量清洗候选,exclude,exact_duplicate
+data/uploads/upload_batch_008.png,upload_batch_008.png,batch,uploaded_original,unknown,unknown,历史上传原图/批量清洗候选,exclude,exact_duplicate
+data/uploads/upload_batch_009.png,upload_batch_009.png,batch,uploaded_original,unknown,unknown,历史上传原图/批量清洗候选,exclude,exact_duplicate
+data/uploads/upload_batch_010.png,upload_batch_010.png,batch,uploaded_original,unknown,unknown,历史上传原图/批量清洗候选,exclude,exact_duplicate
+data/uploads/upload_batch_011.png,upload_batch_011.png,batch,uploaded_original,unknown,unknown,历史上传原图/批量清洗候选,exclude,exact_duplicate
+data/uploads/upload_batch_012.png,upload_batch_012.png,batch,uploaded_original,unknown,unknown,历史上传原图/批量清洗候选,exclude,exact_duplicate
+data/uploads/upload_batch_013.png,upload_batch_013.png,batch,uploaded_original,unknown,unknown,历史上传原图/批量清洗候选,exclude,exact_duplicate
+data/uploads/upload_batch_014.png,upload_batch_014.png,batch,uploaded_original,unknown,unknown,历史上传原图/批量清洗候选,exclude,exact_duplicate
+data/uploads/upload_batch_015.png,upload_batch_015.png,batch,uploaded_original,unknown,unknown,历史上传原图/批量清洗候选,exclude,exact_duplicate
+data/uploads/upload_batch_016.png,upload_batch_016.png,batch,uploaded_original,unknown,unknown,历史上传原图/批量清洗候选,exclude,exact_duplicate
+data/uploads/upload_batch_017.png,upload_batch_017.png,batch,uploaded_original,unknown,unknown,历史上传原图/批量清洗候选,exclude,exact_duplicate
+data/uploads/upload_batch_018.png,upload_batch_018.png,batch,uploaded_original,unknown,unknown,历史上传原图/批量清洗候选,exclude,exact_duplicate
+data/uploads/upload_batch_019.png,upload_batch_019.png,batch,uploaded_original,unknown,unknown,历史上传原图/批量清洗候选,exclude,exact_duplicate
+data/uploads/upload_batch_020.png,upload_batch_020.png,batch,uploaded_original,unknown,unknown,历史上传原图/批量清洗候选,exclude,exact_duplicate
+data/uploads/upload_batch_021.png,upload_batch_021.png,batch,uploaded_original,unknown,unknown,历史上传原图/批量清洗候选,exclude,exact_duplicate
+data/uploads/upload_batch_022.png,upload_batch_022.png,batch,uploaded_original,unknown,unknown,历史上传原图/批量清洗候选,exclude,exact_duplicate
+data/curated/batch/batch_001.png,batch_001.png,batch,ai_cabin_sample,unknown,unknown,批量清洗候选/基础检测样例,review,curated copy from data/samples/sample_batch_001.png; possible_visual_duplicate
+data/curated/batch/batch_002.png,batch_002.png,batch,ai_cabin_sample,unknown,unknown,批量清洗候选/基础检测样例,review,curated copy from data/samples/sample_batch_002.png; possible_visual_duplicate
+data/curated/edge/edge_001.jpg,edge_001.jpg,edge,ai_cabin_sample,unknown,unknown,边界样例/需人工复核,review,curated copy from data/samples/sample_edge_001.jpg; possible_visual_duplicate
+data/curated/five_seat/five_seat_001.png,five_seat_001.png,five_seat,ai_cabin_sample,5,主驾;副驾;后排左;后排中;后排右,五座位检测/多人人脸检测,review,curated copy from data/samples/sample_five_seat_001.png; possible_visual_duplicate
+data/curated/five_seat/five_seat_002.png,five_seat_002.png,five_seat,ai_cabin_sample,5,主驾;副驾;后排左;后排中;后排右,五座位检测/多人人脸检测,review,curated copy from data/samples/sample_five_seat_002.png; possible_visual_duplicate
+data/curated/batch/batch_003.png,batch_003.png,batch,uploaded_original,unknown,unknown,历史上传原图/批量清洗候选,review,curated copy from data/uploads/upload_batch_001.png; possible_visual_duplicate
+data/curated/batch/batch_004.png,batch_004.png,batch,uploaded_original,unknown,unknown,历史上传原图/批量清洗候选,review,curated copy from data/uploads/upload_batch_004.png; possible_visual_duplicate
+data/curated/batch/batch_005.png,batch_005.png,batch,uploaded_original,unknown,unknown,历史上传原图/批量清洗候选,review,curated copy from data/uploads/upload_batch_005.png; possible_visual_duplicate
+data/curated/batch/batch_006.png,batch_006.png,batch,uploaded_original,unknown,unknown,历史上传原图/批量清洗候选,review,curated copy from data/uploads/upload_batch_006.png; possible_visual_duplicate

@@ -20,6 +20,7 @@ class Pipeline:
         use_recognition: bool = False,  # InsightFace特征匹配（CPU慢，默认关闭）
     ):
         self.detector = FaceDetector(conf_threshold=detector_conf)
+        self.similarity_threshold = similarity_threshold
         self.recognizer = FaceRecognizer() if use_recognition else None
         self.classifier = SeatClassifier()
         self.annotator = FaceAnnotator()
@@ -50,7 +51,7 @@ class Pipeline:
 
             # 3. 跨图片人脸匹配
             matched_faces = self.recognizer.match_faces_across_images(
-                raw_faces, similarity_threshold=similarity_threshold
+                raw_faces, similarity_threshold=self.similarity_threshold
             )
         else:
             for i, face in enumerate(raw_faces):
@@ -101,13 +102,14 @@ class Pipeline:
                     face["image_id"] = i
             else:
                 for j, face in enumerate(raw_faces):
+                    face["image_id"] = i
                     face["person_id"] = j + 1
             all_faces.extend(raw_faces)
 
         # 跨所有图片做人脸匹配
         if self.recognizer:
             matched_faces = self.recognizer.match_faces_across_images(
-                all_faces, similarity_threshold=similarity_threshold
+                all_faces, similarity_threshold=self.similarity_threshold
             )
         else:
             matched_faces = all_faces

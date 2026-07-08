@@ -57,6 +57,10 @@ class SeatClassifier:
     """基于人脸框坐标 + 大小的规则座位分类"""
 
     @staticmethod
+    def _bbox_key(bbox) -> tuple:
+        return tuple(round(float(v), 3) for v in bbox)
+
+    @staticmethod
     def classify(bbox, img_w: int, img_h: int, all_bboxes: list = None) -> str:
         cx = (bbox[0] + bbox[2]) / 2
         nx = cx / img_w
@@ -74,12 +78,41 @@ class SeatClassifier:
     @staticmethod
     def _is_front_row(bbox, all_bboxes: list, img_w: int, img_h: int) -> bool:
         if not all_bboxes or len(all_bboxes) == 1:
-            return (bbox[2] - bbox[0]) / img_w > 0.12
+            x1, y1, x2, y2 = map(float, bbox)
+            nx = ((x1 + x2) / 2) / img_w
+            ny = ((y1 + y2) / 2) / img_h
+            width = (x2 - x1) / img_w
+            area = ((x2 - x1) * (y2 - y1)) / (img_w * img_h)
+            side_position = abs(nx - 0.5) >= 0.18
+            front_sized = width >= 0.08 or area >= 0.010
+            lower_half = ny >= 0.28
+            return front_sized and (side_position or lower_half)
 
         n = len(all_bboxes)
+        metrics = []
+        for b in all_bboxes:
+            x1, y1, x2, y2 = map(float, b)
+            bw = max(1.0, x2 - x1)
+            bh = max(1.0, y2 - y1)
+            metrics.append({
+                "bbox": b,
+                "key": SeatClassifier._bbox_key(b),
+                "nx": ((x1 + x2) / 2) / img_w,
+                "ny": ((y1 + y2) / 2) / img_h,
+                "w": bw / img_w,
+                "area": (bw * bh) / (img_w * img_h),
+            })
+
         y_coords = [(b[1] + b[3]) / 2 / img_h for b in all_bboxes]
         sorted_y = sorted(y_coords)
         y_span = sorted_y[-1] - sorted_y[0]
+
+        # 车内广角图里，前排乘员通常在画面左右两侧且脸框更大；
+        # 仅靠 Y 坐标会把前排误判成后排，尤其是三人/五人座舱图。
+        if n >= 3:
+            front_keys = SeatClassifier._front_candidates_by_position(metrics)
+            if front_keys:
+                return SeatClassifier._bbox_key(bbox) in front_keys
 
         if n >= 3 and y_span < 0.06:
             # Y集中 -> 用宽度聚类区分前排/后排
@@ -106,7 +139,7 @@ class SeatClassifier:
                 my_ny = (bbox[1] + bbox[3]) / 2 / img_h
                 return my_ny > (sorted_y[0] + sorted_y[-1]) / 2
             avg_w = sum((b[2]-b[0])/img_w for b in all_bboxes) / 2
-            return avg_w > 0.10
+            return avg_w > 0.08
 
         # 3+脸, Y有分层 -> K-means K=2
         c0, c1 = sorted_y[0], sorted_y[-1]
@@ -140,6 +173,59 @@ class SeatClassifier:
         my_ny = (bbox[1] + bbox[3]) / 2 / img_h
         mc = 0 if abs(my_ny-c0) <= abs(my_ny-c1) else 1
         return mc == fc
+
+    @staticmethod
+    def _front_candidates_by_position(metrics: list[dict]) -> set:
+        if not metrics:
+            return set()
+
+        widths = sorted(m["w"] for m in metrics)
+        median_w = widths[len(widths) // 2]
+        areas = sorted(m["area"] for m in metrics)
+        median_area = areas[len(areas) // 2]
+        median_y = sorted(m["ny"] for m in metrics)[len(metrics) // 2]
+
+        if len(metrics) == 3:
+            by_x = sorted(metrics, key=lambda m: m["nx"])
+            middle = by_x[1]
+            side_width_ratio = min(by_x[0]["w"], by_x[2]["w"]) / max(middle["w"], 1e-6)
+            side_area_ratio = min(by_x[0]["area"], by_x[2]["area"]) / max(middle["area"], 1e-6)
+            y_span = max(m["ny"] for m in metrics) - min(m["ny"] for m in metrics)
+            # 三人后排横向排布时，人脸通常同一高度且大小接近。
+            # 只有左右两侧明显比中间更大时，才认为它们可能是前排。
+            if y_span < 0.08 and side_width_ratio < 1.35 and side_area_ratio < 1.55:
+                return set()
+
+        def score(m):
+            side_score = abs(m["nx"] - 0.5)
+            width_score = m["w"] / max(widths[-1], 1e-6)
+            area_score = m["area"] / max(areas[-1], 1e-6)
+            # 前排常常更靠下，但广角图里驾驶员脸框可能偏高，所以只作为弱信号。
+            y_score = 0.12 if m["ny"] >= median_y else 0.0
+            return side_score * 0.35 + width_score * 0.45 + area_score * 0.20 + y_score
+
+        def plausible_front(m):
+            side_enough = abs(m["nx"] - 0.5) >= 0.12
+            size_enough = m["w"] >= median_w * 0.90 or m["area"] >= median_area * 0.90
+            return side_enough and size_enough
+
+        front = []
+        left = [m for m in metrics if m["nx"] < 0.5]
+        right = [m for m in metrics if m["nx"] >= 0.5]
+
+        for group in (left, right):
+            if not group:
+                continue
+            best = max(group, key=score)
+            if plausible_front(best):
+                front.append(best)
+
+        if len(front) == 2:
+            return {m["key"] for m in front}
+
+        # 如果某侧没有候选，退化为全局挑选最多两个最像前排的人脸。
+        ranked = [m for m in sorted(metrics, key=score, reverse=True) if plausible_front(m)]
+        return {m["key"] for m in ranked[:2]} if len(ranked) >= 2 else set()
 
     @staticmethod
     def get_label(seat_id: str) -> str:
