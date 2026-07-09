@@ -62,6 +62,12 @@ class SeatClassifier:
 
     @staticmethod
     def classify(bbox, img_w: int, img_h: int, all_bboxes: list = None) -> str:
+        if all_bboxes and len(all_bboxes) >= 3:
+            contextual = SeatClassifier._classify_group(all_bboxes, img_w, img_h)
+            seat = contextual.get(SeatClassifier._bbox_key(bbox))
+            if seat:
+                return seat
+
         cx = (bbox[0] + bbox[2]) / 2
         nx = cx / img_w
         is_front = SeatClassifier._is_front_row(bbox, all_bboxes, img_w, img_h)
@@ -74,6 +80,73 @@ class SeatClassifier:
                 return "posterior_right"
             else:
                 return "after_the_middle"
+
+    @staticmethod
+    def _metrics(all_bboxes: list, img_w: int, img_h: int) -> list[dict]:
+        metrics = []
+        for b in all_bboxes:
+            x1, y1, x2, y2 = map(float, b)
+            bw = max(1.0, x2 - x1)
+            bh = max(1.0, y2 - y1)
+            metrics.append({
+                "bbox": b,
+                "key": SeatClassifier._bbox_key(b),
+                "nx": ((x1 + x2) / 2) / img_w,
+                "ny": ((y1 + y2) / 2) / img_h,
+                "w": bw / img_w,
+                "area": (bw * bh) / (img_w * img_h),
+            })
+        return metrics
+
+    @staticmethod
+    def _classify_group(all_bboxes: list, img_w: int, img_h: int) -> dict:
+        metrics = SeatClassifier._metrics(all_bboxes, img_w, img_h)
+        front_keys = SeatClassifier._front_candidates_by_position(metrics)
+        mapping: dict[tuple, str] = {}
+
+        for m in metrics:
+            if m["key"] in front_keys:
+                mapping[m["key"]] = "co_driver" if m["nx"] < 0.50 else "master_driver"
+
+        rear = [m for m in metrics if m["key"] not in front_keys]
+        mapping.update(SeatClassifier._assign_rear_seats(rear))
+        return mapping
+
+    @staticmethod
+    def _assign_rear_seats(rear_metrics: list[dict]) -> dict:
+        if not rear_metrics:
+            return {}
+
+        rear = sorted(rear_metrics, key=lambda m: m["nx"])
+        if len(rear) == 1:
+            nx = rear[0]["nx"]
+            if nx < 0.44:
+                seat = "posterior_left"
+            elif nx > 0.58:
+                seat = "after_the_middle"
+            else:
+                seat = "posterior_right"
+            return {rear[0]["key"]: seat}
+
+        if len(rear) == 2:
+            return {
+                rear[0]["key"]: "posterior_left",
+                rear[1]["key"]: "after_the_middle",
+            }
+
+        mapping = {
+            rear[0]["key"]: "posterior_left",
+            rear[1]["key"]: "posterior_right",
+            rear[2]["key"]: "after_the_middle",
+        }
+        for m in rear[3:]:
+            if m["nx"] < 0.44:
+                mapping[m["key"]] = "posterior_left"
+            elif m["nx"] < 0.56:
+                mapping[m["key"]] = "posterior_right"
+            else:
+                mapping[m["key"]] = "after_the_middle"
+        return mapping
 
     @staticmethod
     def _is_front_row(bbox, all_bboxes: list, img_w: int, img_h: int) -> bool:
@@ -89,19 +162,7 @@ class SeatClassifier:
             return front_sized and (side_position or lower_half)
 
         n = len(all_bboxes)
-        metrics = []
-        for b in all_bboxes:
-            x1, y1, x2, y2 = map(float, b)
-            bw = max(1.0, x2 - x1)
-            bh = max(1.0, y2 - y1)
-            metrics.append({
-                "bbox": b,
-                "key": SeatClassifier._bbox_key(b),
-                "nx": ((x1 + x2) / 2) / img_w,
-                "ny": ((y1 + y2) / 2) / img_h,
-                "w": bw / img_w,
-                "area": (bw * bh) / (img_w * img_h),
-            })
+        metrics = SeatClassifier._metrics(all_bboxes, img_w, img_h)
 
         y_coords = [(b[1] + b[3]) / 2 / img_h for b in all_bboxes]
         sorted_y = sorted(y_coords)
@@ -180,10 +241,14 @@ class SeatClassifier:
             return set()
 
         widths = sorted(m["w"] for m in metrics)
-        median_w = widths[len(widths) // 2]
+        median_w = (widths[(len(widths) - 1) // 2] + widths[len(widths) // 2]) / 2
+        max_w = widths[-1]
         areas = sorted(m["area"] for m in metrics)
-        median_area = areas[len(areas) // 2]
-        median_y = sorted(m["ny"] for m in metrics)[len(metrics) // 2]
+        median_area = (areas[(len(areas) - 1) // 2] + areas[len(areas) // 2]) / 2
+        max_area = areas[-1]
+        ys = sorted(m["ny"] for m in metrics)
+        median_y = (ys[(len(ys) - 1) // 2] + ys[len(ys) // 2]) / 2
+        min_y = ys[0]
 
         if len(metrics) == 3:
             by_x = sorted(metrics, key=lambda m: m["nx"])
@@ -205,9 +270,11 @@ class SeatClassifier:
             return side_score * 0.35 + width_score * 0.45 + area_score * 0.20 + y_score
 
         def plausible_front(m):
-            side_enough = abs(m["nx"] - 0.5) >= 0.12
-            size_enough = m["w"] >= median_w * 0.90 or m["area"] >= median_area * 0.90
-            return side_enough and size_enough
+            side_enough = abs(m["nx"] - 0.5) >= 0.10
+            dominant_size = m["w"] >= max_w * 0.70 or m["area"] >= max_area * 0.55
+            not_far_back = m["ny"] >= min_y + 0.04 or m["area"] >= max_area * 0.70
+            group_reasonable = m["w"] >= median_w * 0.95 or m["area"] >= median_area * 0.95
+            return side_enough and dominant_size and not_far_back and group_reasonable
 
         front = []
         left = [m for m in metrics if m["nx"] < 0.5]
@@ -220,7 +287,7 @@ class SeatClassifier:
             if plausible_front(best):
                 front.append(best)
 
-        if len(front) == 2:
+        if front:
             return {m["key"] for m in front}
 
         # 如果某侧没有候选，退化为全局挑选最多两个最像前排的人脸。
@@ -238,6 +305,30 @@ class SeatClassifier:
 
 class FaceAnnotator:
     """使用 PIL 绘制支持中文的标注"""
+
+    @staticmethod
+    def _label_position(
+        x1: int,
+        y1: int,
+        x2: int,
+        y2: int,
+        label_w: int,
+        label_h: int,
+        img_w: int,
+        img_h: int,
+    ) -> tuple[int, int, int, int]:
+        label_x = min(max(0, x1), max(0, img_w - label_w))
+
+        # Prefer drawing above the face box. If there is not enough room,
+        # place the label inside the top of the box, then below as fallback.
+        if y1 - label_h >= 0:
+            label_y = y1 - label_h
+        elif y1 + label_h <= y2:
+            label_y = y1
+        else:
+            label_y = min(max(0, y2), max(0, img_h - label_h))
+
+        return label_x, label_y, label_x + label_w, label_y + label_h
 
     @staticmethod
     def draw(image: np.ndarray, faces: list[dict]) -> np.ndarray:
@@ -262,18 +353,25 @@ class FaceAnnotator:
             bbox_text = draw.textbbox((0, 0), label, font=font)
             tw = bbox_text[2] - bbox_text[0]
             th = bbox_text[3] - bbox_text[1]
+            label_w = tw + 12
+            label_h = th + 8
 
             # 标签背景
-            label_y = max(0, y1 - th - 8)
-            draw.rectangle([x1, label_y, x1 + tw + 12, y1], fill=color_rgb)
+            label_box = FaceAnnotator._label_position(x1, y1, x2, y2, label_w, label_h, w, h)
+            draw.rectangle(label_box, fill=color_rgb)
 
             # 标签文字（白色）
-            draw.text((x1 + 6, label_y + 2), label, font=font, fill=(255, 255, 255))
+            draw.text((label_box[0] + 6, label_box[1] + 2), label, font=font, fill=(255, 255, 255))
 
             # 置信度
             if f.get("conf"):
                 conf_text = f"{f['conf']:.2f}"
-                draw.text((x1, y2 + 4), conf_text, font=font, fill=color_rgb)
+                conf_box = draw.textbbox((0, 0), conf_text, font=font)
+                conf_w = conf_box[2] - conf_box[0]
+                conf_h = conf_box[3] - conf_box[1]
+                conf_x = min(max(0, x1), max(0, w - conf_w))
+                conf_y = y2 + 4 if y2 + conf_h + 4 <= h else max(0, y1 - conf_h - 4)
+                draw.text((conf_x, conf_y), conf_text, font=font, fill=color_rgb)
 
         # 转回 OpenCV 格式
         return cv2.cvtColor(np.array(pil_img), cv2.COLOR_RGB2BGR)

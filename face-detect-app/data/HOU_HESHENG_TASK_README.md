@@ -28,6 +28,16 @@ python face-detect-app/tools/rename_data_images.py
 
 重命名脚本采用两阶段改名并做冲突检查，只处理 `face-detect-app/data/` 下的图片。
 
+## 验收测试
+
+当前课题2版本不依赖外部数据集，验收样例来自现有 `curated/` 目录。运行：
+
+```bash
+python face-detect-app/tools/run_acceptance_tests.py
+```
+
+脚本会调用后端检测流程，重新写入 `acceptance_test_records.csv`。其中 `pass` 表示已匹配预期人数和座位，`review` 表示可作为人工复核或边界样例，`fail` 表示图片缺失或不可读取。
+
 ## 字段说明
 
 `dataset_manifest.csv` 中无法确认的人数和座位统一填写为 `unknown`，避免硬编标准答案。`cleaning_report.csv` 的 `action` 字段仅使用 `keep`、`review`、`exclude`，其中 `exclude` 只是报告建议，不代表脚本已删除文件。
