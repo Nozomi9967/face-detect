@@ -7,6 +7,7 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
+import android.graphics.Color;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
@@ -14,9 +15,11 @@ import android.os.Environment;
 import android.provider.MediaStore;
 import android.view.KeyEvent;
 import android.view.View;
+import android.view.WindowInsetsController;
 import android.view.inputmethod.EditorInfo;
 import android.webkit.ValueCallback;
 import android.webkit.WebChromeClient;
+import android.webkit.WebResourceError;
 import android.webkit.WebResourceRequest;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
@@ -32,6 +35,7 @@ import androidx.appcompat.widget.Toolbar;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 import androidx.core.content.FileProvider;
+import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
 
 import java.io.File;
 import java.io.IOException;
@@ -43,6 +47,7 @@ public class MainActivity extends AppCompatActivity {
 
     private WebView webView;
     private ProgressBar progressBar;
+    private SwipeRefreshLayout swipeRefresh;
     private static final int REQUEST_FILE_PICKER = 1001;
     private static final int REQUEST_PERMISSIONS = 1002;
     private ValueCallback<Uri[]> filePathCallback;
@@ -60,11 +65,23 @@ public class MainActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
+        // Edge-to-edge display
+        applyEdgeToEdge();
+
         Toolbar toolbar = findViewById(R.id.toolbar);
         setSupportActionBar(toolbar);
 
         webView = findViewById(R.id.webview);
         progressBar = findViewById(R.id.progress_bar);
+        swipeRefresh = findViewById(R.id.swipe_refresh);
+
+        // Swipe-to-refresh
+        swipeRefresh.setColorSchemeColors(
+                getResources().getColor(R.color.primary, null),
+                getResources().getColor(R.color.primary_dark, null));
+        swipeRefresh.setOnRefreshListener(() -> {
+            webView.reload();
+        });
 
         WebSettings settings = webView.getSettings();
         settings.setJavaScriptEnabled(true);
@@ -80,6 +97,11 @@ public class MainActivity extends AppCompatActivity {
         settings.setBuiltInZoomControls(true);
         settings.setDisplayZoomControls(false);
 
+        // Text scaling for better readability
+        settings.setTextZoom(100);
+        settings.setLoadWithOverviewMode(true);
+        settings.setUseWideViewPort(true);
+
         webView.setWebViewClient(new WebViewClient() {
             @Override
             public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
@@ -90,6 +112,17 @@ public class MainActivity extends AppCompatActivity {
             @Override
             public void onPageFinished(WebView view, String url) {
                 progressBar.setVisibility(View.GONE);
+                if (swipeRefresh.isRefreshing()) {
+                    swipeRefresh.setRefreshing(false);
+                }
+            }
+
+            @Override
+            public void onReceivedError(WebView view, WebResourceRequest request,
+                                        WebResourceError error) {
+                if (request.isForMainFrame()) {
+                    showErrorPage(error.getDescription().toString());
+                }
             }
         });
 
@@ -259,7 +292,7 @@ public class MainActivity extends AppCompatActivity {
             } catch (ActivityNotFoundException e) {
                 filePathCallback.onReceiveValue(null);
                 filePathCallback = null;
-                Toast.makeText(this, "无法打开相机或文件选择器", Toast.LENGTH_SHORT).show();
+                Toast.makeText(this, "无法打开相机或文件选择�?, Toast.LENGTH_SHORT).show();
             }
         } else {
             // Just file picker
@@ -268,7 +301,7 @@ public class MainActivity extends AppCompatActivity {
             } catch (ActivityNotFoundException e) {
                 filePathCallback.onReceiveValue(null);
                 filePathCallback = null;
-                Toast.makeText(this, "无法打开文件选择器", Toast.LENGTH_SHORT).show();
+                Toast.makeText(this, "无法打开文件选择�?, Toast.LENGTH_SHORT).show();
             }
         }
     }
@@ -297,14 +330,14 @@ public class MainActivity extends AppCompatActivity {
                     allGranted = false;
                     String perm = permissions[i];
                     if (android.Manifest.permission.CAMERA.equals(perm)) {
-                        Toast.makeText(this, "需要相机权限才能拍照", Toast.LENGTH_LONG).show();
+                        Toast.makeText(this, "需要相机权限才能拍�?, Toast.LENGTH_LONG).show();
                     } else {
-                        Toast.makeText(this, "需要存储权限才能上传图片", Toast.LENGTH_LONG).show();
+                        Toast.makeText(this, "需要存储权限才能上传图�?, Toast.LENGTH_LONG).show();
                     }
                 }
             }
             if (allGranted) {
-                Toast.makeText(this, "权限已获取", Toast.LENGTH_SHORT).show();
+                Toast.makeText(this, "权限已获�?, Toast.LENGTH_SHORT).show();
             }
         }
     }
@@ -374,5 +407,52 @@ public class MainActivity extends AppCompatActivity {
             return true;
         }
         return super.onOptionsItemSelected(item);
+    }
+
+    // ── Edge-to-edge display ──
+    private void applyEdgeToEdge() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            // API 30+: draw behind system bars
+            getWindow().setDecorFitsSystemWindows(false);
+            WindowInsetsController controller = getWindow().getInsetsController();
+            if (controller != null) {
+                controller.setSystemBarsAppearance(
+                        WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS,
+                        WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS);
+            }
+        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            // API 26-29: translucent status bar
+            getWindow().getDecorView().setSystemUiVisibility(
+                    View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+                            | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
+                            | View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR);
+            getWindow().setStatusBarColor(Color.TRANSPARENT);
+
+            getWindow().setNavigationBarColor(Color.TRANSPARENT);
+        }
+    }
+
+    // ── Show error page when connection fails ──
+    private void showErrorPage(String errorMessage) {
+        runOnUiThread(() -> {
+            String errorHtml = "<!DOCTYPE html><html lang='zh-CN'><head>" +
+                    "<meta charset='UTF-8'><meta name='viewport' content='width=device-width,initial-scale=1'>" +
+                    "<style>body{font-family:-apple-system,sans-serif;display:flex;align-items:center;" +
+                    "justify-content:center;min-height:100vh;background:#F1F5F9;margin:0;padding:20px;" +
+                    "text-align:center;color:#0F172A;}.card{background:white;border-radius:16px;padding:32px 24px;" +
+                    "box-shadow:0 4px 16px rgba(0,0,0,0.08);max-width:360px;}.icon{font-size:48px;margin-bottom:16px;}" +
+                    "h1{font-size:1.1rem;margin:0 0 8px;}.msg{font-size:0.85rem;color:#64748B;margin:8px 0 20px;}" +
+                    ".btn{display:inline-block;padding:12px 24px;border:none;border-radius:12px;background:#2563EB;" +
+                    "color:white;font-size:0.9rem;font-weight:600;cursor:pointer;text-decoration:none;}" +
+                    ".spinner{width:36px;height:36px;border:3px solid #E2E8F0;border-top:3px solid #2563EB;" +
+                    "border-radius:50%;animation:spin 0.8s linear infinite;margin:0 auto 16px;}" +
+                    "@keyframes spin{to{transform:rotate(360deg)}}</style></head><body><div class='card'>" +
+                    "<div class='icon'>\u26A0\uFE0F</div><h1>\u65E0\u6CD5\u8FDE\u63A5\u5230\u670D\u52A1\u5668</h1>" +
+                    "<div class='msg'>\u8BF7\u786E\u8BA4\u7535\u8111\u5DF2\u542F\u52A8\u670D\u52A1\uFF0C\u4E14\u624B\u673A\u4E0E\u7535\u8111\u5728\u540C\u4E00\u7F51\u7EDC\u3002<br/>" +
+                    errorMessage + "</div>" +
+                    "<a class='btn' onclick='location.reload()'>\uD83D\uDD01 \u91CD\u65B0\u8FDE\u63A5</a>" +
+                    "</div></body></html>";
+            webView.loadDataWithBaseURL(null, errorHtml, "text/html", "UTF-8", null);
+        });
     }
 }
