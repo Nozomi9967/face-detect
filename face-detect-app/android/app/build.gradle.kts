@@ -35,6 +35,7 @@ dependencies {
     implementation("com.google.android.material:material:1.11.0")
     implementation("androidx.constraintlayout:constraintlayout:2.1.4")
     implementation("androidx.webkit:webkit:1.9.0")
+    implementation("androidx.swiperefreshlayout:swiperefreshlayout:1.1.0")
     // QR code scanner — pure Java, no Google Play Services needed
     implementation("com.journeyapps:zxing-android-embedded:4.3.0") {
         exclude(group = "com.android.support")

@@ -4,10 +4,14 @@
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-    <path
-        android:fillColor="#3B82F6"
-        android:pathData="M54,0C24.18,0 0,24.18 0,54s24.18,54 54,54 54,-24.18 54,-54S83.82,0 54,0z" />
+    <!-- 白色大写 F（无衬线粗体感），居中于安全区 -->
     <path
         android:fillColor="#FFFFFF"
-        android:pathData="M54,16c-1.1,0 -2,0.9 -2,2v18H36c-1.1,0 -2,0.9 -2,2v14c0,1.1 0.9,2 2,2h16c1.1,0 2,-0.9 2,-2V36h16c1.1,0 2,-0.9 2,-2V18c0,-1.1 -0.9,-2 -2,-2H54zM36,18h16v14H36V18zM54,40h16v14H54V40z" />
+        android:pathData="M32,24h18v62h-18Z" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M32,24h48v17h-48Z" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M32,53h36v17h-36Z" />
 </vector>

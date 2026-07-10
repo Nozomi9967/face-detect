@@ -136,6 +136,8 @@ class Pipeline:
                         "seat": f["seat"],
                         "seat_label": SeatClassifier.get_label(f["seat"]),
                         "person_id": f["person_id"],
+                        # 回传 image_id，供前端在批量人脸列表中标注所属图片序号
+                        "image_id": f["image_id"],
                     }
                     for f in img_faces
                 ],

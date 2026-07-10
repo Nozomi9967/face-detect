@@ -6,10 +6,11 @@ Android 移动端应用，将多人脸采集素材自动化清洗系统封装为
 
 ```
 FaceDetect Android/
-├── MainActivity          # WebView 主界面，加载前端页面
-├── SplashActivity        # 启动闪屏页
+├── MainActivity          # WebView 主界面，加载前端页面（exported=false）
+├── SplashActivity        # 启动闪屏页（LAUNCHER，exported=true）
+├── SetupActivity         # 配网扫码页，扫描二维码获取服务器地址
 ├── SettingsActivity      # 服务器地址配置页面
-├── JsBridge              # JavaScript ↔ Java 通信桥
+├── JsBridge              # JavaScript ↔ Java 通信桥（showToast / getServerUrl / log）
 └── res/                  # 资源文件（布局、样式、颜色）
 ```
 
@@ -46,8 +47,10 @@ build-debug.bat
 
 ```bat
 adb install android/app/build/outputs/apk/debug/app-debug.apk
-adb shell am start -n com.facedetect/.MainActivity
+adb shell am start -n com.facedetect/.SplashActivity
 ```
+
+> **注意**：`MainActivity` 为 `exported=false`，不能用 `am start` 直接拉起；启动入口是导出的 `SplashActivity`。更简单的做法是在手机桌面直接点击应用图标打开。
 
 #### 方式二：Android Studio 导入
 
@@ -86,12 +89,17 @@ App 通过 HTTP 调用以下 API：
 | `/api/detect-batch` | POST | 批量图片检测 |
 | `/api/health` | GET | 健康检查 |
 | `/api/seat-zones` | GET | 座位区域配置 |
+| `/api/server-info` | GET | 服务器地址（供配网二维码使用） |
 
-后端启动命令：
+后端启动命令（**必须从 `backend/` 目录运行**，否则 detector 找不到 `yolov8n-face-lindevs.pt` 会回退 Haar）：
+
 ```bash
-cd face-detect-app
-python -m uvicorn backend.app.main:app --host 0.0.0.0 --port 8000
+cd face-detect-app/backend
+pip install -r requirements.txt
+python -m uvicorn app.main:app --host 0.0.0.0 --port 8000
 ```
+
+> **JsBridge 说明**：当前 `JsBridge` 仅实现 `showToast(String)`、`getServerUrl()`（返回硬编码的 `10.0.2.2:8000`，且 MainActivity 实际从 `SharedPreferences` 读取地址、并未调用此方法）、`log(String)` 三个方法。前端调用的 `AndroidBridge.onServerUrlSet(url)` **未实现**，前端已用可选链/真值判断做了守卫，因此不会崩溃，但服务器地址不会经由此桥写回原生——地址配置仍以前端 `localStorage` + 原生 `SettingsActivity` 为准。
 
 ## 设计系统
 

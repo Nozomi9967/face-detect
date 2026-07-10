@@ -83,6 +83,10 @@ public class MainActivity extends AppCompatActivity {
             webView.reload();
         });
 
+        // 仅当网页已滚动到顶部时才允许下拉刷新；否则把手势交给 WebView，
+        // 避免下拉刷新与页面内部纵向滚动/回顶互相争抢（表现为一直回不到顶部）
+        swipeRefresh.setOnChildScrollUpCallback((parent, child) -> webView.getScrollY() > 0);
+
         WebSettings settings = webView.getSettings();
         settings.setJavaScriptEnabled(true);
         settings.setDomStorageEnabled(true);
@@ -292,7 +296,7 @@ public class MainActivity extends AppCompatActivity {
             } catch (ActivityNotFoundException e) {
                 filePathCallback.onReceiveValue(null);
                 filePathCallback = null;
-                Toast.makeText(this, "无法打开相机或文件选择�?, Toast.LENGTH_SHORT).show();
+                Toast.makeText(this, "无法打开相机或文件选择", Toast.LENGTH_SHORT).show();
             }
         } else {
             // Just file picker
@@ -301,7 +305,7 @@ public class MainActivity extends AppCompatActivity {
             } catch (ActivityNotFoundException e) {
                 filePathCallback.onReceiveValue(null);
                 filePathCallback = null;
-                Toast.makeText(this, "无法打开文件选择�?, Toast.LENGTH_SHORT).show();
+                Toast.makeText(this, "无法打开文件选择", Toast.LENGTH_SHORT).show();
             }
         }
     }
@@ -438,16 +442,16 @@ public class MainActivity extends AppCompatActivity {
             String errorHtml = "<!DOCTYPE html><html lang='zh-CN'><head>" +
                     "<meta charset='UTF-8'><meta name='viewport' content='width=device-width,initial-scale=1'>" +
                     "<style>body{font-family:-apple-system,sans-serif;display:flex;align-items:center;" +
-                    "justify-content:center;min-height:100vh;background:#F1F5F9;margin:0;padding:20px;" +
-                    "text-align:center;color:#0F172A;}.card{background:white;border-radius:16px;padding:32px 24px;" +
-                    "box-shadow:0 4px 16px rgba(0,0,0,0.08);max-width:360px;}.icon{font-size:48px;margin-bottom:16px;}" +
-                    "h1{font-size:1.1rem;margin:0 0 8px;}.msg{font-size:0.85rem;color:#64748B;margin:8px 0 20px;}" +
-                    ".btn{display:inline-block;padding:12px 24px;border:none;border-radius:12px;background:#2563EB;" +
+                    "justify-content:center;min-height:100vh;background:#FBF9F4;margin:0;padding:20px;" +
+                    "text-align:center;color:#211F1C;}.card{background:white;border-radius:16px;padding:32px 24px;" +
+                    "box-shadow:0 2px 8px rgba(33,31,28,0.06);max-width:360px;}" +
+                    "h1{font-size:1.1rem;margin:0 0 8px;}.msg{font-size:0.85rem;color:#6F6A62;margin:8px 0 20px;}" +
+                    ".btn{display:inline-block;padding:12px 24px;border:none;border-radius:12px;background:#CC785C;" +
                     "color:white;font-size:0.9rem;font-weight:600;cursor:pointer;text-decoration:none;}" +
-                    ".spinner{width:36px;height:36px;border:3px solid #E2E8F0;border-top:3px solid #2563EB;" +
+                    ".spinner{width:36px;height:36px;border:3px solid #E8E2D8;border-top:3px solid #CC785C;}" +
                     "border-radius:50%;animation:spin 0.8s linear infinite;margin:0 auto 16px;}" +
                     "@keyframes spin{to{transform:rotate(360deg)}}</style></head><body><div class='card'>" +
-                    "<div class='icon'>\u26A0\uFE0F</div><h1>\u65E0\u6CD5\u8FDE\u63A5\u5230\u670D\u52A1\u5668</h1>" +
+                    "<h1>\u65E0\u6CD5\u8FDE\u63A5\u5230\u670D\u52A1\u5668</h1>" +
                     "<div class='msg'>\u8BF7\u786E\u8BA4\u7535\u8111\u5DF2\u542F\u52A8\u670D\u52A1\uFF0C\u4E14\u624B\u673A\u4E0E\u7535\u8111\u5728\u540C\u4E00\u7F51\u7EDC\u3002<br/>" +
                     errorMessage + "</div>" +
                     "<a class='btn' onclick='location.reload()'>\uD83D\uDD01 \u91CD\u65B0\u8FDE\u63A5</a>" +

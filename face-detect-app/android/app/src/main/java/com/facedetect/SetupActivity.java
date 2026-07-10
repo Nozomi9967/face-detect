@@ -202,7 +202,7 @@ public class SetupActivity extends AppCompatActivity {
             serverUrlInput.setText(url);
         }
         statusText.setText("已扫码，地址已填入");
-        statusText.setTextColor(getResources().getColor(android.R.color.darker_gray));
+        statusText.setTextColor(getResources().getColor(R.color.text_secondary));
         attemptConnect();
     }
 
@@ -297,7 +297,7 @@ public class SetupActivity extends AppCompatActivity {
                 saveAndProceed(testUrl);
             } else {
                 statusText.setText("连接失败，请检查地址后重试");
-                statusText.setTextColor(getResources().getColor(android.R.color.holo_red_dark));
+                statusText.setTextColor(getResources().getColor(R.color.error));
                 connectBtn.setEnabled(true);
                 scanBtn.setEnabled(true);
             }
@@ -316,7 +316,7 @@ public class SetupActivity extends AppCompatActivity {
         if (!url.endsWith("/")) url += "/";
 
         statusText.setText("正在连接 " + url + " ...");
-        statusText.setTextColor(getResources().getColor(android.R.color.darker_gray));
+        statusText.setTextColor(getResources().getColor(R.color.text_secondary));
         connectBtn.setEnabled(false);
         scanBtn.setEnabled(false);
         new VerifyTask(url).execute(url);
@@ -330,7 +330,7 @@ public class SetupActivity extends AppCompatActivity {
                 .apply();
 
         statusText.setText("连接成功！正在进入...");
-        statusText.setTextColor(getResources().getColor(android.R.color.holo_green_dark));
+        statusText.setTextColor(getResources().getColor(R.color.success));
 
         new Handler(Looper.getMainLooper()).postDelayed(() -> {
             startActivity(new Intent(SetupActivity.this, MainActivity.class));

@@ -15,7 +15,7 @@
 当前版本不下载外部数据集，不重新训练模型。系统采用：
 
 - YOLOv8-face / Haar Cascade fallback：检测人脸框坐标和置信度。
-- InsightFace / 像素特征 fallback：在批量图片中尽量匹配同一人员 ID。
+- InsightFace / 像素特征 fallback：在批量图片中匹配同一人员 ID（**可选，默认关闭**；默认 `person_id` 为图内检测顺序编号，不做跨图合并）。
 - 固定视角规则分类器：基于人脸框位置、宽度占比、面积占比和多人相对位置判断座位。
 - FastAPI + HTML 前端：提供单张检测、批量检测、标注图展示和结果汇总。
 
@@ -40,7 +40,7 @@
 
 - 保持 `/api/detect` 和 `/api/detect-batch` 接口不变，继续输出 `bbox`、`conf`、`seat`、`seat_label`、`person_id`。
 - 使用现有 `data/samples/`、`data/uploads/`、`data/results/`、`data/curated/` 样例作为测试材料。
-- 维护 `dataset_manifest.csv`、`cleaning_report.csv`、`acceptance_test_records.csv` 三类交付文件。
+- 维护 `dataset_manifest.csv`、`cleaning_report.csv`、`acceptance_test_records.csv`、`upload_rerun_report.csv`、`rename_map.csv` 等交付/过程文件（均由 `tools/` 下脚本生成）。
 - 对可稳定通过的样例归入演示样例，对误判、漏检、遮挡、极端光照样例归入失败/边界样例。
 - 在最终报告中明确说明：当前阶段完成固定视角下的自动化清洗流程，后续可通过引入人体姿态检测、座位标注数据和专门座位分类模型提升泛化能力。
 

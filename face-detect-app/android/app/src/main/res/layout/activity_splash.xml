@@ -3,7 +3,7 @@
     xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@color/primary"
+    android:background="@color/background"
     android:orientation="vertical"
     android:gravity="center"
     android:padding="48dp">
@@ -22,7 +22,7 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:text="@string/app_name"
-        android:textColor="@android:color/white"
+        android:textColor="@color/text_primary"
         android:textSize="28sp"
         android:textStyle="bold"
         android:fontFamily="sans-serif-medium"
@@ -34,9 +34,9 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:text="多人脸采集素材自动化清洗"
-        android:textColor="@android:color/white"
+        android:textColor="@color/text_secondary"
         android:textSize="14sp"
-        android:alpha="0.75"
+        android:alpha="0.85"
         android:layout_marginTop="8dp" />
 
     <!-- Bottom indicator -->
@@ -45,7 +45,7 @@
         android:layout_height="24dp"
         android:layout_marginTop="48dp"
         android:indeterminate="true"
-        android:indeterminateTint="@android:color/white"
+        android:indeterminateTint="@color/primary"
         android:alpha="0.6" />
 
 </LinearLayout>

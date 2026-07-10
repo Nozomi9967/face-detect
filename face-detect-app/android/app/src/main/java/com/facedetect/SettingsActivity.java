@@ -70,7 +70,9 @@ public class SettingsActivity extends AppCompatActivity {
         Button cancelBtn = findViewById(R.id.cancel_btn);
         cancelBtn.setOnClickListener(v -> finish());
 
-        Button scanBtn = findViewById(R.id.scan_qr_btn);
+        findViewById(R.id.back_btn).setOnClickListener(v -> finish());
+
+        View scanBtn = findViewById(R.id.scan_qr_btn);
         scanBtn.setOnClickListener(v -> startQRScan());
     }
 
