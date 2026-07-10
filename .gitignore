@@ -25,6 +25,7 @@ Thumbs.db
 
 # ── Build & output artifacts ────────────────
 *.log
+*.err
 *.tmp
 output.txt
 extracted.txt
@@ -45,6 +46,9 @@ face-detect-app/data/
 face-detect-app/data/uploads/[0-9]*
 face-detect-app/data/results/result_[0-9]*
 face-detect-app/data/results/batch_[0-9]*
+face-detect-app/data/results/fixed_issue_*.jpg
+face-detect-app/data/results/test4_current_annotated.jpg
+face-detect-app/data/results/upload_rerun/
 doc/~$*.docx
 # 调试图片
 face-detect-app/backend/*.jpg

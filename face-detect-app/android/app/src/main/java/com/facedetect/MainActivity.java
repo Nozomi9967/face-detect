@@ -334,14 +334,14 @@ public class MainActivity extends AppCompatActivity {
                     allGranted = false;
                     String perm = permissions[i];
                     if (android.Manifest.permission.CAMERA.equals(perm)) {
-                        Toast.makeText(this, "需要相机权限才能拍照", Toast.LENGTH_LONG).show();
+                        Toast.makeText(this, "需要相机权限才能拍�?, Toast.LENGTH_LONG).show();
                     } else {
-                        Toast.makeText(this, "需要存储权限才能上传图片", Toast.LENGTH_LONG).show();
+                        Toast.makeText(this, "需要存储权限才能上传图�?, Toast.LENGTH_LONG).show();
                     }
                 }
             }
             if (allGranted) {
-                Toast.makeText(this, "权限已获取", Toast.LENGTH_SHORT).show();
+                Toast.makeText(this, "权限已获�?, Toast.LENGTH_SHORT).show();
             }
         }
     }
