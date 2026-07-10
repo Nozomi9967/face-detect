@@ -187,11 +187,15 @@ async def server_info():
     """返回服务器地址，供手机配网页面获取"""
     import os
     public_ip = os.environ.get("PUBLIC_IP", "")
-    port = int(os.environ.get("PORT", "80"))
     base_path = os.environ.get("BASE_PATH", "")
     if public_ip:
+        # 生产环境：经 Nginx 反向代理，默认 80 端口
+        port = int(os.environ.get("PORT", "80"))
         host = f"http://{public_ip}" if port in (80, 443) else f"http://{public_ip}:{port}"
     else:
+        # 开发环境：直接用 uvicorn 实际监听的端口（默认 8000），
+        # 不能用 PORT 默认值 80，否则二维码里的地址端口错误导致手机连不上
+        port = int(os.environ.get("APP_PORT", "8000"))
         ip = _get_lan_ip()
         host = f"http://{ip}:{port}"
     # 拼上路径前缀（生产环境 Nginx 代理路径，如 /face）

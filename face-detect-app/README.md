@@ -2,13 +2,19 @@
 
 YOLOv8-face（优先）+ OpenCV Haar Cascade（fallback）+ InsightFace/像素特征（特征匹配）+ 规则座位分类的多人脸检测与素材清洗系统。
 
+## 课题定位与适用范围
+
+本项目面向“课题2：多人脸采集素材自动化清洗”，目标是在移动端或 Web 页面上传车内多人脸图片后，自动获取每个人的 **人脸框坐标**、**人员 ID** 和 **座位位置**，并在图片上标注显示。座位位置按课题要求划分为主驾 `master_driver`、副驾 `co_driver`、后排左 `posterior_left`、后排中 `posterior_right`、后排右 `after_the_middle`。
+
+当前实现不额外训练座位分类模型，也不依赖 TICaM、SVIRO 等外部标注数据集。系统采用成熟的人脸检测模型完成检测，再用人脸框坐标、大小占比和相对位置规则完成五座位映射。因此，本版本适用于 **固定或近似固定车内摄像头视角** 的采集素材清洗。对于大角度、严重遮挡、暗光、强光、跨车型/跨摄像头视角等极端 case，系统会作为边界样例记录，后续可通过人体姿态检测或专门座位分类模型继续优化。
+
 ## 技术架构
 
 | 模块 | 实现 | 说明 |
 |------|------|------|
 | 人脸检测 | YOLOv8n-face (lindevs, 6MB) | 优先模型，检测精度高；置信度阈值默认 0.1 |
-| 特征匹配 | InsightFace ArcFace (buffalo_l) | 512维特征，跨图匹配同一人（可选，CPU较慢） |
-| 座位分类 | 坐标规则引擎 | 5区域划分，自适应前后排判断（Y坐标+宽度聚类） |
+| 特征匹配 | InsightFace ArcFace (buffalo_l，可选) | 512维特征，开启后可跨图匹配同一人；默认关闭（`use_recognition=False`），此时 `person_id` 仅图内顺序编号 |
+| 座位分类 | 固定视角坐标规则引擎 | 5区域划分，基于人脸框位置、大小占比、相对位置判断前后排 |
 | 后端服务 | FastAPI + Uvicorn | RESTful API + 静态文件服务 |
 | 前端界面 | HTML5 + CSS3 + Vanilla JS | 响应式移动端适配 |
 | 中文标注 | PIL + simhei.ttf | OpenCV不支持中文，用PIL渲染 |
@@ -21,28 +27,41 @@ face-detect-app/
 ├── backend/
 │   ├── app/
 │   │   ├── __init__.py
-│   │   ├── main.py          # FastAPI 服务入口
+│   │   ├── main.py          # FastAPI 服务入口（7个端点）
 │   │   ├── detector.py      # YOLOv8-face / Haar Cascade 人脸检测
-│   │   ├── recognizer.py    # InsightFace / 像素特征 人脸匹配
+│   │   ├── recognizer.py    # InsightFace / 像素特征 人脸匹配（默认关闭）
 │   │   ├── seat_classifier.py # 座位区域规则分类 + PIL标注绘制
 │   │   └── pipeline.py      # 检测流程编排
 │   ├── requirements.txt
-│   └── __init__.py
+│   ├── yolov8n-face-lindevs.pt  # 人脸检测模型权重（实际加载位置）
+│   └── fonts/               # 中文字体（备用）
 ├── frontend/
 │   ├── index.html           # 移动端检测页面（单张+批量）
 │   └── setup.html           # 配网页面（二维码+手动输入）
-├── android/                 # Android 原生客户端
+├── android/                 # Android 原生客户端（WebView 封装）
 │   ├── README.md
 │   ├── build-debug.bat      # Windows 一键构建脚本
 │   ├── app/
 │   │   ├── build.gradle.kts
-│   │   ├── src/main/        # Java 源码 + 资源
+│   │   ├── src/main/        # Java 源码（5个Activity + JsBridge）+ 资源
 │   │   └── proguard-rules.pro
 │   └── build.gradle.kts
+├── tools/                   # 数据集整理与验收脚本
+│   ├── prepare_hou_dataset.py     # 数据集整理、去重、生成 CSV
+│   ├── rename_data_images.py      # 图片重命名（带回滚）
+│   ├── rerun_uploads_check.py     # 重跑 uploads 检测
+│   └── run_acceptance_tests.py    # 验收用例执行
 ├── data/
 │   ├── uploads/             # 上传图片
-│   └── results/             # 检测结果
-└── models/                  # 模型权重目录（可选）
+│   ├── results/             # 检测结果（含 upload_rerun/）
+│   ├── samples/             # 样例图片
+│   ├── curated/             # 验收/演示精选样例（five_seat/edge/batch）
+│   ├── dataset_manifest.csv       # 数据集清单
+│   ├── cleaning_report.csv        # 清洗报告
+│   ├── acceptance_test_records.csv # 验收记录
+│   ├── upload_rerun_report.csv    # 重跑报告
+│   └── rename_map.csv             # 重命名映射
+└── models/                  # 预留模型目录（当前为空，权重实际在 backend/）
 ```
 
 ## 快速开始
@@ -108,7 +127,7 @@ python -m uvicorn app.main:app --host 0.0.0.0 --port 8000
 
 ## 座位分类规则
 
-座位分类采用自适应算法：根据人脸框位置和大小自动判断前后排，再按 X 坐标映射座位。参考区域如下：
+座位分类采用固定视角启发式规则：根据人脸框中心点、宽度占比、面积占比、多人相对位置自动判断前后排，再按 X 坐标映射座位。该方法可解释、部署轻量，但依赖车内摄像头视角稳定；它不是训练得到的通用车辆乘员座位识别模型。参考区域如下：
 
 | 座位ID | X范围 | Y范围 | 颜色 | 含义 |
 |--------|-------|-------|------|------|
@@ -128,10 +147,21 @@ python -m uvicorn app.main:app --host 0.0.0.0 --port 8000
 
 ## 测试结果
 
-在5人合成测试图上：
-- 检测准确率：5/5 (100%)
-- 座位分类准确率：5/5 (100%)
-- 处理耗时：~300ms (CPU)
+由 `tools/run_acceptance_tests.py` 在 `data/curated/` 实拍样例上跑出（非合成图）：
+
+| 用例 | 场景 | 预期人数→实际 | 结果 |
+|------|------|---------------|------|
+| TC-FIXED-001 | 五座满员图 | 5 → 5 | pass |
+| TC-FIXED-002 | 五座满员图 | 5 → 5 | pass |
+| TC-FIXED-003 | 批量样例 | ? → 2 | pass（manual_review） |
+| TC-FIXED-004 | 批量样例 | ? → 3 | pass（manual_review） |
+| TC-FIXED-005 | 边界样例 | ? → 5 | pass（manual_review） |
+| TC-FIXED-006 | 6张批量 | ? → 20 | pass（manual_review） |
+
+- 6 个用例全部 `pass`，其中 3 个为 `manual_review_case`（预期人数未知，需人工复核）。
+- 处理耗时：160ms ~ 6748ms（首例含模型加载），典型 200~300ms（CPU）。
+- 检测引擎默认使用 YOLOv8-face（`backend/yolov8n-face-lindevs.pt`）；未部署时回退 Haar Cascade。
+- 人员 ID（`person_id`）默认按图内检测顺序编号（未启用跨图匹配）。
 
 ## 技术栈
 
@@ -342,4 +372,5 @@ systemctl restart face-detect
 - Nginx worker 进程以 `nginx` 用户运行，前端文件需放在 Nginx 可读的目录（如 `/usr/share/nginx/html/`），`/root/` 等目录无法访问
 - `/face/api/` 路径下的请求会被 Nginx 代理到 FastAPI，前端 JS 中使用相对路径 `./api/` 而非绝对路径 `/api/`
 - `PUBLIC_IP` 环境变量用于让 `server-info` 接口返回正确的公网地址，供配网页面使用
-- 模型文件 `yolov8n-face-lindevs.pt`（约 6MB）需与代码同步到服务器
+- 模型权重 `yolov8n-face-lindevs.pt`（约 6MB）位于 `backend/` 目录，detector 从后端工作目录加载（**不是** `models/` 目录），部署时需随 `backend/` 一起存在。
+- FastAPI 后端本身**不带** `/face/` 路由前缀；`BASE_PATH` 仅用于 `server-info` 接口拼出供配网二维码使用的完整 URL，`/face/` 前缀完全由 Nginx 在外部处理。

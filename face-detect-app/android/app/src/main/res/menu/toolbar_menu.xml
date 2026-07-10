@@ -3,7 +3,6 @@
     xmlns:app="http://schemas.android.com/apk/res-auto">
     <item
         android:id="@+id/action_settings"
-        android:icon="@android:drawable/ic_menu_manage"
         android:title="设置"
-        app:showAsAction="ifRoom" />
+        app:showAsAction="never" />
 </menu>
