@@ -11,7 +11,7 @@ dist/
 build/
 *.whl
 
-# ── Node / Frontend ─────────────────────────
+# ── Node / Frontend ────────────────────────
 node_modules/
 
 # ── OS / Editor junk ────────────────────────
@@ -30,19 +30,28 @@ output.txt
 extracted.txt
 
 # ── Project-specific ────────────────────────
-gen_doc.py                          # 一次性文档生成脚本
-fix_pdfs.py                         # PDF 修复脚本
-extract_docx.py                     # docx 提取脚本
-unpacked/                           # docx 解压中间目录
-face-detect-app/backend/test_*.jpg  # 测试/调试图片
-face-detect-app/data/               # 运行时数据目录（uploads/results）
+# 一次性文档生成脚本
+gen_doc.py
+# PDF 修复脚本
+fix_pdfs.py
+# docx 提取脚本
+extract_docx.py
+# docx 解压中间目录
+unpacked/
+# 测试/调试图片
+face-detect-app/backend/test_*.jpg
+# 运行时数据目录（uploads/results）
+face-detect-app/data/
 face-detect-app/data/uploads/[0-9]*
 face-detect-app/data/results/result_[0-9]*
 face-detect-app/data/results/batch_[0-9]*
 doc/~$*.docx
-face-detect-app/backend/*.jpg       # 调试图片
-face-detect-app/android/.gradle/    # Gradle 构建缓存
-face-detect-app/android/build/      # Gradle 构建输出
+# 调试图片
+face-detect-app/backend/*.jpg
+# Gradle 构建缓存
+face-detect-app/android/.gradle/
+# Gradle 构建输出
+face-detect-app/android/build/
 face-detect-app/android/local.properties
 *.apk
 .claude/
